@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Code2, Eye, MessageSquare, PenLine, Send, Square } from "lucide-react";
-import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { ExportActions } from "@/components/studio/ExportActions";
 import { LivePreview } from "@/components/studio/LivePreview";
+import { StudioDesktopSplit } from "@/components/studio/StudioDesktopSplit";
 import { ThinkingStatus } from "@/components/studio/ThinkingStatus";
 import { cn } from "@/lib/utils";
 import {
@@ -28,88 +28,6 @@ import { useOnline } from "@/lib/pwa/use-online";
 import { useStudioStore } from "@/stores/studio-store";
 
 type MobilePanel = "chat" | "code" | "preview";
-
-const SPLIT_STORAGE_ID = "cozy-studio-split";
-
-function StudioResizeHandle() {
-  return (
-    <Separator
-      className={cn(
-        "relative z-10 -mx-1.5 flex w-3 shrink-0 items-stretch",
-        "cursor-col-resize touch-none",
-        "before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-border before:transition-colors",
-        "hover:before:bg-accent/70 data-[separator=active]:before:bg-accent data-[separator=focus]:before:bg-accent/70",
-      )}
-    />
-  );
-}
-
-const panelFlexStyle = { overflow: "hidden" } as const;
-
-function StudioDesktopSplit({
-  showSource,
-  chat,
-  source,
-  preview,
-}: {
-  showSource: boolean;
-  chat: ReactNode;
-  source: ReactNode;
-  preview: ReactNode;
-}) {
-  const panelIds = showSource ? (["chat", "source", "preview"] as const) : (["chat", "preview"] as const);
-  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
-    id: SPLIT_STORAGE_ID,
-    panelIds: [...panelIds],
-  });
-
-  return (
-    <Group
-      id={SPLIT_STORAGE_ID}
-      orientation="horizontal"
-      className="hidden min-h-0 h-full w-full flex-1 lg:flex"
-      defaultLayout={defaultLayout}
-      onLayoutChanged={onLayoutChanged}
-    >
-      <Panel
-        id="chat"
-        minSize={8}
-        collapsible
-        defaultSize={showSource ? "18" : "22"}
-        className="flex h-full min-h-0 flex-col bg-surface"
-        style={panelFlexStyle}
-      >
-        {chat}
-      </Panel>
-      <StudioResizeHandle />
-      {showSource ? (
-        <>
-          <Panel
-            id="source"
-            minSize={8}
-            collapsible
-            defaultSize="42"
-            className="flex h-full min-h-0 flex-col bg-canvas"
-            style={panelFlexStyle}
-          >
-            {source}
-          </Panel>
-          <StudioResizeHandle />
-        </>
-      ) : null}
-      <Panel
-        id="preview"
-        minSize={8}
-        collapsible
-        defaultSize={showSource ? "40" : "78"}
-        className="flex h-full min-h-0 flex-col bg-canvas"
-        style={panelFlexStyle}
-      >
-        {preview}
-      </Panel>
-    </Group>
-  );
-}
 
 function providerLabel(status: AiStatus | null, used: string | null): string {
   if (used === "mistral") return "Mistral";
