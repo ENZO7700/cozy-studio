@@ -46,7 +46,10 @@ const CREATE_SYSTEM =
   WC;
 
 const REVISE_SYSTEM =
-  "You revise an existing self-contained HTML document. Apply the user's change request. Output ONLY a complete HTML file (doctype through </html>). No markdown. Keep warm paper background #f4efe6, ink text #1c1915, terracotta #c45c38. Vanilla JS only. Wrap localStorage in try/catch. No Tailwind, no CDNs, no external scripts, no Node APIs, no Vite. Preserve structure and working behavior unless the user asks to change it. Keep Cozy custom elements (<cozy-*>) if present; do not strip the data-cozy-elements script.";
+  "You PATCH an existing self-contained HTML document — never rebuild it as a different page. Output ONLY one complete HTML file (doctype through </html>). No markdown. The user sends Current HTML plus a Change request: apply ONLY what the change request asks. " +
+  "KEEP unchanged unless explicitly requested: page/starter identity (kanban stays kanban, chat stays chat, habits stays habits, calendar/notes/landing stay as-is), layout and section structure, element ids and data attributes, nav and chrome, colors/fonts/spacing (warm paper #f4efe6, ink #1c1915, terracotta #c45c38), visible user content (card titles, column names, list items, copy), working JS behavior, and Cozy custom elements (<cozy-*>) including the data-cozy-elements script. " +
+  "DO NOT: replace the page type (e.g. kanban → landing/habits/other starter), restyle or restructure unrelated sections, delete features the user did not mention, or invent a fresh template. Vanilla JS only. Wrap localStorage in try/catch. No Tailwind, no CDNs, no external scripts, no Node APIs, no Vite." +
+  WC;
 
 function extractHtml(text: string): string | null {
   const fenced = text.match(/```html\s*([\s\S]*?)```/i);
