@@ -4,6 +4,7 @@ import { Code2, Eye, MessageSquare, PenLine, Send, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ExportActions } from "@/components/studio/ExportActions";
 import { LivePreview } from "@/components/studio/LivePreview";
+import { StarterConfigCanvas } from "@/components/studio/StarterConfigCanvas";
 import { StudioDesktopSplit } from "@/components/studio/StudioDesktopSplit";
 import { StudioNavRail } from "@/components/studio/StudioNavRail";
 import { ThinkingStatus } from "@/components/studio/ThinkingStatus";
@@ -19,7 +20,11 @@ import {
   type MistralModelId,
 } from "@/lib/ai/generate";
 import { localPreviewHtml } from "@/lib/preview/local-templates";
-import type { Starter } from "@/lib/preview/starters";
+import {
+  composeStarterPrompt,
+  getStarterById,
+  type Starter,
+} from "@/lib/preview/starters";
 import {
   addRecent,
   loadRecents,
@@ -87,6 +92,8 @@ export function StudioShell() {
   });
   const [recents, setRecents] = useState<StudioRecent[]>(() => loadRecents());
   const [starredIds, setStarredIds] = useState<Set<string>>(() => loadStarredIds());
+  const [configStarterId, setConfigStarterId] = useState<string | null>(null);
+  const [selectedAddonIds, setSelectedAddonIds] = useState<Set<string>>(() => new Set());
   const online = useOnline();
   const thinkRef = useRef<HTMLDivElement>(null);
   const runId = useRef(0);
@@ -137,7 +144,56 @@ export function StudioShell() {
     setShowSource(false);
     setPanel("chat");
     setMobileNavOpen(false);
+    setConfigStarterId(null);
+    setSelectedAddonIds(new Set());
     void clearOfflinePreview();
+  }
+
+  function syncBriefFromConfig(starterId: string, addonIds: ReadonlySet<string>) {
+    const starter = getStarterById(starterId);
+    if (!starter) return;
+    setBrief(composeStarterPrompt(starter, addonIds));
+  }
+
+  function pickStarter(starter: Starter) {
+    setLastStarterId(starter.id);
+    try {
+      localStorage.setItem(LAST_STARTER_KEY, starter.id);
+    } catch {
+      /* private mode */
+    }
+    setMobileNavOpen(false);
+    setConfigStarterId(starter.id);
+    setSelectedAddonIds(new Set());
+    syncBriefFromConfig(starter.id, new Set());
+    setPanel("preview");
+  }
+
+  function toggleConfigAddon(addonId: string) {
+    if (!configStarterId) return;
+    setSelectedAddonIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(addonId)) next.delete(addonId);
+      else next.add(addonId);
+      syncBriefFromConfig(configStarterId, next);
+      return next;
+    });
+  }
+
+  function resetConfigSelection() {
+    if (!configStarterId) return;
+    setSelectedAddonIds(new Set());
+    syncBriefFromConfig(configStarterId, new Set());
+  }
+
+  function generateFromConfig() {
+    const starter = configStarterId ? getStarterById(configStarterId) : undefined;
+    if (!starter || running) return;
+    const prompt = composeStarterPrompt(starter, selectedAddonIds);
+    setBrief(prompt);
+    setConfigStarterId(null);
+    setSelectedAddonIds(new Set());
+    void run(prompt, { fresh: true });
   }
 
   function recordGeneration(opts: {
@@ -149,19 +205,10 @@ export function StudioShell() {
     setRecents(addRecent(opts));
   }
 
-  function pickStarter(starter: Starter) {
-    setLastStarterId(starter.id);
-    try {
-      localStorage.setItem(LAST_STARTER_KEY, starter.id);
-    } catch {
-      /* private mode */
-    }
-    setMobileNavOpen(false);
-    void run(starter.prompt, { fresh: true });
-  }
-
   function openRecent(recent: StudioRecent) {
     setMobileNavOpen(false);
+    setConfigStarterId(null);
+    setSelectedAddonIds(new Set());
     if (recent.html) {
       restorePreview({
         title: recent.title,
@@ -454,6 +501,8 @@ export function StudioShell() {
     </>
   );
 
+  const configStarter = configStarterId ? getStarterById(configStarterId) : undefined;
+
   const previewPanel = (
     <>
       <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border pl-3 pr-1">
@@ -462,13 +511,25 @@ export function StudioShell() {
             ? html
               ? "Upravujem"
               : "Premýšľanie"
-            : online
-              ? "Live preview"
-              : "Saved preview"}
+            : configStarter
+              ? "Configure"
+              : online
+                ? "Live preview"
+                : "Saved preview"}
         </p>
         <ExportActions html={html} title={title} />
       </div>
-      {html ? (
+      {configStarter && !running ? (
+        <StarterConfigCanvas
+          starter={configStarter}
+          selectedAddonIds={selectedAddonIds}
+          running={running}
+          online={online}
+          onToggleAddon={toggleConfigAddon}
+          onResetSelection={resetConfigSelection}
+          onGenerate={generateFromConfig}
+        />
+      ) : html ? (
         <div className="relative min-h-0 flex-1">
           <LivePreview html={html} title={title} />
           {running ? (
@@ -489,12 +550,12 @@ export function StudioShell() {
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
           <p className="text-sm text-muted">
             {online
-              ? "Pick a starter or write a brief to fill this canvas."
+              ? "Pick a starter from the menu or write a brief to fill this canvas."
               : "Offline. Generate a local layout, or reopen to restore the last preview."}
           </p>
           <ol className="max-w-xs space-y-1.5 text-left text-xs leading-relaxed text-subtle">
-            <li>1. Brief or starter</li>
-            <li>2. Generate on the server</li>
+            <li>1. Choose a starter and add-ons</li>
+            <li>2. Click Vytvoriť on the canvas</li>
             <li>3. Revise without blanking the canvas</li>
           </ol>
         </div>
