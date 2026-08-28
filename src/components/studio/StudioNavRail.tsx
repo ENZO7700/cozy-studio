@@ -3,7 +3,6 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  Clock,
   LayoutGrid,
   Menu,
   MessageSquare,
@@ -232,23 +231,15 @@ function RailBody({
   );
 }
 
-function matchesQuery(text: string, q: string) {
-  return text.toLowerCase().includes(q);
-}
-
 export function StudioSearchPalette({
   open,
   onOpenChange,
-  onPickStarter,
-  onPickRecent,
-  recents,
+  onPick,
   running,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onPickStarter: (starter: Starter) => void;
-  onPickRecent: (recent: StudioRecent) => void;
-  recents: StudioRecent[];
+  onPick: (starter: Starter) => void;
   running: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -263,32 +254,15 @@ export function StudioSearchPalette({
     return () => window.clearTimeout(t);
   }, [open]);
 
-  const q = query.trim().toLowerCase();
-
-  const filteredStarters = useMemo(() => {
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
     if (!q) return STARTERS;
     return STARTERS.filter(
-      (s) => matchesQuery(s.label, q) || matchesQuery(s.prompt, q),
+      (s) => s.label.toLowerCase().includes(q) || s.prompt.toLowerCase().includes(q),
     );
-  }, [q]);
-
-  const filteredRecents = useMemo(() => {
-    if (!q) return recents;
-    return recents.filter(
-      (r) => matchesQuery(r.title, q) || matchesQuery(r.brief, q),
-    );
-  }, [q, recents]);
-
-  const firstPick = filteredStarters[0]
-    ? { kind: "starter" as const, item: filteredStarters[0] }
-    : filteredRecents[0]
-      ? { kind: "recent" as const, item: filteredRecents[0] }
-      : null;
+  }, [query]);
 
   if (!open) return null;
-
-  const hasResults = filteredStarters.length > 0 || filteredRecents.length > 0;
-  const showSections = Boolean(q) || (filteredStarters.length > 0 && filteredRecents.length > 0);
 
   return (
     <div
@@ -298,7 +272,7 @@ export function StudioSearchPalette({
     >
       <div
         role="dialog"
-        aria-label="Search starters and recents"
+        aria-label="Search starters"
         className="w-full max-w-md overflow-hidden rounded-xl border border-border bg-surface shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
@@ -309,13 +283,12 @@ export function StudioSearchPalette({
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter starters & recents…"
+            placeholder="Filter starters…"
             className="min-w-0 flex-1 bg-transparent py-3 text-sm text-fg placeholder:text-subtle focus:outline-none"
             onKeyDown={(e) => {
               if (e.key === "Escape") onOpenChange(false);
-              if (e.key === "Enter" && firstPick && !running) {
-                if (firstPick.kind === "starter") onPickStarter(firstPick.item);
-                else onPickRecent(firstPick.item);
+              if (e.key === "Enter" && filtered[0] && !running) {
+                onPick(filtered[0]);
                 onOpenChange(false);
               }
             }}
@@ -329,71 +302,31 @@ export function StudioSearchPalette({
             <X className="size-4" />
           </button>
         </div>
-        <div className="max-h-64 overflow-y-auto p-2">
-          {!hasResults ? (
-            <p className="px-2 py-3 text-sm text-subtle">No matching starters or recents.</p>
+        <ul className="max-h-64 overflow-y-auto p-2">
+          {filtered.length === 0 ? (
+            <li className="px-2 py-3 text-sm text-subtle">No matching starters.</li>
           ) : (
-            <>
-              {filteredStarters.length > 0 ? (
-                <section aria-label="Starters">
-                  {showSections ? (
-                    <p className="mb-1 px-2 text-[10px] font-medium uppercase tracking-widest text-subtle">
-                      Starters
-                    </p>
-                  ) : null}
-                  <ul className="space-y-0.5">
-                    {filteredStarters.map((s) => {
-                      const Icon = STARTER_ICONS[s.id] ?? LayoutGrid;
-                      return (
-                        <li key={s.id}>
-                          <button
-                            type="button"
-                            disabled={running}
-                            onClick={() => {
-                              onPickStarter(s);
-                              onOpenChange(false);
-                            }}
-                            className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm text-fg hover:bg-card disabled:opacity-50"
-                          >
-                            <Icon className="size-4 text-accent" aria-hidden />
-                            <span>{s.label}</span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </section>
-              ) : null}
-              {filteredRecents.length > 0 ? (
-                <section aria-label="Recents" className={filteredStarters.length > 0 ? "mt-2" : ""}>
-                  {showSections ? (
-                    <p className="mb-1 px-2 text-[10px] font-medium uppercase tracking-widest text-subtle">
-                      Recents
-                    </p>
-                  ) : null}
-                  <ul className="space-y-0.5">
-                    {filteredRecents.map((r) => (
-                      <li key={r.id}>
-                        <button
-                          type="button"
-                          disabled={running}
-                          onClick={() => {
-                            onPickRecent(r);
-                            onOpenChange(false);
-                          }}
-                          className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm text-fg hover:bg-card disabled:opacity-50"
-                        >
-                          <Clock className="size-4 shrink-0 text-subtle" aria-hidden />
-                          <span className="min-w-0 truncate">{r.title}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
-            </>
+            filtered.map((s) => {
+              const Icon = STARTER_ICONS[s.id] ?? LayoutGrid;
+              return (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    disabled={running}
+                    onClick={() => {
+                      onPick(s);
+                      onOpenChange(false);
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm text-fg hover:bg-card disabled:opacity-50"
+                  >
+                    <Icon className="size-4 text-accent" aria-hidden />
+                    <span>{s.label}</span>
+                  </button>
+                </li>
+              );
+            })
           )}
-        </div>
+        </ul>
       </div>
     </div>
   );
@@ -458,9 +391,7 @@ export function StudioNavRail(props: StudioNavRailProps) {
       <StudioSearchPalette
         open={searchOpen}
         onOpenChange={setSearchOpen}
-        onPickStarter={bodyProps.onStarter}
-        onPickRecent={bodyProps.onRecent}
-        recents={bodyProps.recents}
+        onPick={bodyProps.onStarter}
         running={bodyProps.running}
       />
     </aside>
