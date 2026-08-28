@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Link } from "@tanstack/react-router";
-import { Code2, Eye, MessageSquare, PenLine, Send, Square } from "lucide-react";
+import { Code2, Eye, MessageSquare, MoreHorizontal, PenLine, Send, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ExportActions } from "@/components/studio/ExportActions";
 import { FileChip, StudioFilesPanel } from "@/components/studio/StudioFilesPanel";
 import { LivePreview } from "@/components/studio/LivePreview";
 import { PreviewPulseSkeleton } from "@/components/studio/PreviewPulseSkeleton";
 import { StarterConfigCanvas } from "@/components/studio/StarterConfigCanvas";
 import { StudioDesktopSplit } from "@/components/studio/StudioDesktopSplit";
 import { StudioNavRail } from "@/components/studio/StudioNavRail";
-import { StudioOverflowMenu } from "@/components/studio/StudioOverflowMenu";
 import { ThinkingStatus } from "@/components/studio/ThinkingStatus";
 import { cn } from "@/lib/utils";
 import {
@@ -16,6 +17,7 @@ import {
   DEFAULT_REVISE_MODEL,
   generatePreview,
   getAiStatus,
+  MISTRAL_MODELS,
   mistralModelLabel,
   type AiStatus,
   type MistralModelId,
@@ -407,6 +409,30 @@ export function StudioShell() {
         }}
       >
         <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+        {online && status?.mistral ? (
+          <div className="mb-2">
+            <label
+              htmlFor="mistral-model"
+              className="mb-1 block text-xs uppercase tracking-wider text-subtle"
+            >
+              Model
+            </label>
+            <select
+              id="mistral-model"
+              name="mistral-model"
+              value={selectedModel}
+              disabled={running}
+              onChange={(e) => setSelectedModel(e.target.value as MistralModelId)}
+              className="w-full rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+            >
+              {MISTRAL_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
         <label className="sr-only" htmlFor="brief">
           Brief
         </label>
@@ -562,16 +588,34 @@ export function StudioShell() {
           <Button type="button" variant="ghost" size="sm" onClick={() => reset()}>
             New
           </Button>
-          <StudioOverflowMenu
-            html={html}
-            title={title}
-            showSource={showSource}
-            onToggleSource={() => setShowSource((v) => !v)}
-            selectedModel={selectedModel}
-            onModelChange={setSelectedModel}
-            running={running}
-            showModelPicker={online && Boolean(status?.mistral)}
-          />
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <Button type="button" variant="ghost" size="sm" aria-label="More actions">
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                align="end"
+                sideOffset={6}
+                className="z-50 min-w-[11rem] overflow-hidden rounded-xl border border-border bg-surface p-1 shadow-lg"
+              >
+                <DropdownMenu.Item
+                  className="flex cursor-pointer select-none items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-fg outline-none data-[highlighted]:bg-card"
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setShowSource((v) => !v);
+                  }}
+                >
+                  <Code2 className="size-3.5" aria-hidden />
+                  {showSource ? "Hide source" : "Source"}
+                </DropdownMenu.Item>
+                <div className="border-t border-border p-1">
+                  <ExportActions html={html} title={title} />
+                </div>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
         </div>
       </header>
 
