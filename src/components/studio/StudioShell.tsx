@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Code2, Eye, MessageSquare, PenLine, Send, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ExportActions } from "@/components/studio/ExportActions";
 import { FileChip, StudioFilesPanel } from "@/components/studio/StudioFilesPanel";
 import { LivePreview } from "@/components/studio/LivePreview";
 import { PreviewPulseSkeleton } from "@/components/studio/PreviewPulseSkeleton";
 import { StarterConfigCanvas } from "@/components/studio/StarterConfigCanvas";
 import { StudioDesktopSplit } from "@/components/studio/StudioDesktopSplit";
 import { StudioNavRail } from "@/components/studio/StudioNavRail";
+import { StudioOverflowMenu } from "@/components/studio/StudioOverflowMenu";
 import { ThinkingStatus } from "@/components/studio/ThinkingStatus";
 import { cn } from "@/lib/utils";
 import {
@@ -16,7 +16,6 @@ import {
   DEFAULT_REVISE_MODEL,
   generatePreview,
   getAiStatus,
-  MISTRAL_MODELS,
   mistralModelLabel,
   type AiStatus,
   type MistralModelId,
@@ -343,7 +342,6 @@ export function StudioShell() {
     }
   }
 
-  const sourceText = code || html;
   const studioFiles = listStudioFiles(html, code);
 
   const navRailProps = {
@@ -355,7 +353,6 @@ export function StudioShell() {
     recents,
     starredIds,
     running,
-    onNew: reset,
     onStarter: pickStarter,
     onRecent: openRecent,
     onToggleStar: toggleStar,
@@ -410,30 +407,6 @@ export function StudioShell() {
         }}
       >
         <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
-        {online && status?.mistral ? (
-          <div className="mb-2">
-            <label
-              htmlFor="mistral-model"
-              className="mb-1 block text-xs uppercase tracking-wider text-subtle"
-            >
-              Model
-            </label>
-            <select
-              id="mistral-model"
-              name="mistral-model"
-              value={selectedModel}
-              disabled={running}
-              onChange={(e) => setSelectedModel(e.target.value as MistralModelId)}
-              className="w-full rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-            >
-              {MISTRAL_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : null}
         <label className="sr-only" htmlFor="brief">
           Brief
         </label>
@@ -489,9 +462,8 @@ export function StudioShell() {
       activeFile={activeFile}
       onSelectFile={setActiveFile}
       header={
-        <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border pl-3 pr-1">
+        <div className="flex h-12 shrink-0 items-center border-b border-border pl-3 pr-1">
           <p className="min-w-0 truncate text-xs uppercase tracking-widest text-subtle">Code</p>
-          <ExportActions html={sourceText} title={title} />
         </div>
       }
     />
@@ -501,7 +473,7 @@ export function StudioShell() {
 
   const previewPanel = (
     <>
-      <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border pl-3 pr-1">
+      <div className="flex h-12 shrink-0 items-center border-b border-border pl-3 pr-1">
         <p className="min-w-0 truncate text-xs uppercase tracking-widest text-subtle">
           {running
             ? html
@@ -513,7 +485,6 @@ export function StudioShell() {
                 ? "Live preview"
                 : "Saved preview"}
         </p>
-        <ExportActions html={html} title={title} />
       </div>
       {configStarter && !running ? (
         <StarterConfigCanvas
@@ -575,7 +546,7 @@ export function StudioShell() {
             Cozy
           </Link>
           {html ? (
-            <span className="hidden truncate text-xs text-muted sm:inline">{title}</span>
+            <span className="min-w-0 truncate text-xs text-muted">{title}</span>
           ) : null}
         </div>
         <div className="flex items-center gap-2">
@@ -588,18 +559,19 @@ export function StudioShell() {
               {providerLabel(status, provider)}
             </p>
           )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="hidden lg:inline-flex"
-            onClick={() => setShowSource((v) => !v)}
-          >
-            {showSource ? "Hide source" : "Source"}
-          </Button>
           <Button type="button" variant="ghost" size="sm" onClick={() => reset()}>
             New
           </Button>
+          <StudioOverflowMenu
+            html={html}
+            title={title}
+            showSource={showSource}
+            onToggleSource={() => setShowSource((v) => !v)}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            running={running}
+            showModelPicker={online && Boolean(status?.mistral)}
+          />
         </div>
       </header>
 
