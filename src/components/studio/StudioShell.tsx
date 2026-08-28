@@ -2,13 +2,39 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Code2, Eye, MessageSquare, PenLine, Send, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ExportActions } from "@/components/studio/ExportActions";
+import { FileChip, StudioFilesPanel } from "@/components/studio/StudioFilesPanel";
 import { LivePreview } from "@/components/studio/LivePreview";
+import { PreviewPulseSkeleton } from "@/components/studio/PreviewPulseSkeleton";
+import { StarterConfigCanvas } from "@/components/studio/StarterConfigCanvas";
+import { StudioDesktopSplit } from "@/components/studio/StudioDesktopSplit";
+import { StudioNavRail } from "@/components/studio/StudioNavRail";
+import { StudioOverflowMenu } from "@/components/studio/StudioOverflowMenu";
 import { ThinkingStatus } from "@/components/studio/ThinkingStatus";
 import { cn } from "@/lib/utils";
-import { generatePreview, getAiStatus, type AiStatus } from "@/lib/ai/generate";
+import {
+  DEFAULT_CREATE_MODEL,
+  DEFAULT_REVISE_MODEL,
+  generatePreview,
+  getAiStatus,
+  mistralModelLabel,
+  type AiStatus,
+  type MistralModelId,
+} from "@/lib/ai/generate";
 import { localPreviewHtml } from "@/lib/preview/local-templates";
-import { STARTERS } from "@/lib/preview/starters";
+import {
+  composeStarterPrompt,
+  getStarterById,
+  type Starter,
+} from "@/lib/preview/starters";
+import {
+  addRecent,
+  loadRecents,
+  loadStarredIds,
+  toggleStarred,
+  type StudioRecent,
+} from "@/lib/studio/recents";
+import { fileRefs, listStudioFiles } from "@/lib/studio/files";
+import { shouldApplyLocalPreviewOnFailure } from "@/lib/studio/run-failure";
 import {
   clearOfflinePreview,
   persistOfflinePreview,
@@ -16,6 +42,8 @@ import {
 } from "@/lib/pwa/offline";
 import { useOnline } from "@/lib/pwa/use-online";
 import { useStudioStore } from "@/stores/studio-store";
+
+const LAST_STARTER_KEY = "cozy-studio-last-starter";
 
 type MobilePanel = "chat" | "code" | "preview";
 
@@ -45,6 +73,7 @@ export function StudioShell() {
   const setError = useStudioStore((s) => s.setError);
   const resetStore = useStudioStore((s) => s.reset);
   const hydratePreview = useStudioStore((s) => s.hydratePreview);
+  const restorePreview = useStudioStore((s) => s.restorePreview);
   const error = useStudioStore((s) => s.error);
   const messages = useStudioStore((s) => s.messages);
   const html = useStudioStore((s) => s.html);
@@ -54,6 +83,21 @@ export function StudioShell() {
   const [panel, setPanel] = useState<MobilePanel>("chat");
   const [showSource, setShowSource] = useState(false);
   const [status, setStatus] = useState<AiStatus | null>(null);
+  const [selectedModel, setSelectedModel] = useState<MistralModelId>(DEFAULT_CREATE_MODEL);
+  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [lastStarterId, setLastStarterId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(LAST_STARTER_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const [recents, setRecents] = useState<StudioRecent[]>(() => loadRecents());
+  const [starredIds, setStarredIds] = useState<Set<string>>(() => loadStarredIds());
+  const [configStarterId, setConfigStarterId] = useState<string | null>(null);
+  const [selectedAddonIds, setSelectedAddonIds] = useState<Set<string>>(() => new Set());
+  const [activeFile, setActiveFile] = useState<string | null>(null);
   const online = useOnline();
   const thinkRef = useRef<HTMLDivElement>(null);
   const runId = useRef(0);
@@ -61,6 +105,10 @@ export function StudioShell() {
   useEffect(() => {
     void getAiStatus().then(setStatus);
   }, []);
+
+  useEffect(() => {
+    setSelectedModel(html ? DEFAULT_REVISE_MODEL : DEFAULT_CREATE_MODEL);
+  }, [html]);
 
   useEffect(() => {
     if (!html) return;
@@ -89,9 +137,24 @@ export function StudioShell() {
     thinkRef.current?.scrollIntoView({ block: "nearest" });
   }, [running, messages.length]);
 
+  useEffect(() => {
+    const files = listStudioFiles(html, code);
+    if (!files.length) return;
+    setActiveFile((current) => {
+      if (current && files.some((f) => f.name === current)) return current;
+      return files[0]!.name;
+    });
+  }, [html, code]);
+
   function stop() {
     runId.current += 1;
     setRunning(false);
+  }
+
+  function openStudioFile(name: string) {
+    setActiveFile(name);
+    setShowSource(true);
+    setPanel("code");
   }
 
   function reset() {
@@ -99,7 +162,91 @@ export function StudioShell() {
     resetStore();
     setShowSource(false);
     setPanel("chat");
+    setMobileNavOpen(false);
+    setConfigStarterId(null);
+    setSelectedAddonIds(new Set());
+    setActiveFile(null);
     void clearOfflinePreview();
+  }
+
+  function syncBriefFromConfig(starterId: string, addonIds: ReadonlySet<string>) {
+    const starter = getStarterById(starterId);
+    if (!starter) return;
+    setBrief(composeStarterPrompt(starter, addonIds));
+  }
+
+  function pickStarter(starter: Starter) {
+    setLastStarterId(starter.id);
+    try {
+      localStorage.setItem(LAST_STARTER_KEY, starter.id);
+    } catch {
+      /* private mode */
+    }
+    setMobileNavOpen(false);
+    setConfigStarterId(starter.id);
+    setSelectedAddonIds(new Set());
+    syncBriefFromConfig(starter.id, new Set());
+    setPanel("preview");
+  }
+
+  function toggleConfigAddon(addonId: string) {
+    if (!configStarterId) return;
+    setSelectedAddonIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(addonId)) next.delete(addonId);
+      else next.add(addonId);
+      syncBriefFromConfig(configStarterId, next);
+      return next;
+    });
+  }
+
+  function resetConfigSelection() {
+    if (!configStarterId) return;
+    setSelectedAddonIds(new Set());
+    syncBriefFromConfig(configStarterId, new Set());
+  }
+
+  function generateFromConfig() {
+    const starter = configStarterId ? getStarterById(configStarterId) : undefined;
+    if (!starter || running) return;
+    const prompt = composeStarterPrompt(starter, selectedAddonIds);
+    setBrief(prompt);
+    setConfigStarterId(null);
+    setSelectedAddonIds(new Set());
+    void run(prompt, { fresh: true });
+  }
+
+  function recordGeneration(opts: {
+    title: string;
+    code: string;
+    html: string;
+    brief: string;
+  }) {
+    setRecents(addRecent(opts));
+  }
+
+  function openRecent(recent: StudioRecent) {
+    setMobileNavOpen(false);
+    setConfigStarterId(null);
+    setSelectedAddonIds(new Set());
+    if (recent.html) {
+      restorePreview({
+        title: recent.title,
+        code: recent.code,
+        html: recent.html,
+        brief: recent.brief,
+      });
+      setActiveFile("index.html");
+      setPanel("preview");
+      return;
+    }
+    if (recent.brief.trim()) {
+      void run(recent.brief, { fresh: true });
+    }
+  }
+
+  function toggleStar(id: string) {
+    setStarredIds(toggleStarred(id));
   }
 
   async function run(promptOverride?: string, opts?: { fresh?: boolean }) {
@@ -114,7 +261,7 @@ export function StudioShell() {
     pushUser(prompt);
     const started = Date.now();
     if (!online) {
-      if (revising) {
+      if (!shouldApplyLocalPreviewOnFailure(online, revising)) {
         await sleep(Math.max(0, 700 - (Date.now() - started)));
         if (id !== runId.current) return;
         pushAssistant("Offline. Preview unchanged.");
@@ -127,6 +274,14 @@ export function StudioShell() {
         ...local,
         assistantText: "Offline. Local layout saved on this device.",
         provider: "local",
+        files: fileRefs(local.html, local.code),
+      });
+      setActiveFile("index.html");
+      recordGeneration({
+        title: local.title,
+        code: local.code,
+        html: local.html,
+        brief: prompt,
       });
       setBrief("");
       setPanel("preview");
@@ -134,7 +289,11 @@ export function StudioShell() {
     }
     try {
       const remote = await generatePreview({
-        data: { prompt, html: revising ? currentHtml : "" },
+        data: {
+          prompt,
+          html: revising ? currentHtml : "",
+          model: selectedModel,
+        },
       });
       if (id !== runId.current) return;
       if (remote.ok) {
@@ -145,10 +304,20 @@ export function StudioShell() {
           assistantText: revising
             ? "Updated the board."
             : remote.provider === "mistral"
-              ? "Preview generated with Mistral Codestral."
+              ? `Preview generated with ${mistralModelLabel(remote.model)}.`
               : "Preview generated with Grok.",
           provider: remote.provider,
+          files: fileRefs(remote.html, remote.code),
         });
+        setActiveFile("index.html");
+        if (!revising) {
+          recordGeneration({
+            title: remote.title,
+            code: remote.code,
+            html: remote.html,
+            brief: prompt,
+          });
+        }
         setBrief("");
         setPanel("preview");
         return;
@@ -158,16 +327,8 @@ export function StudioShell() {
         setError(remote.error);
         return;
       }
-      const local = localPreviewHtml(prompt);
-      await sleep(Math.max(0, 720 - (Date.now() - started)));
-      if (id !== runId.current) return;
-      applyResult({
-        ...local,
-        assistantText: `${remote.error}. Local layout applied.`,
-        provider: "local",
-      });
-      setBrief("");
-      setPanel("preview");
+      pushAssistant(remote.error);
+      setError(remote.error);
     } catch (e) {
       if (id !== runId.current) return;
       const message = e instanceof Error ? e.message : "Generate failed";
@@ -176,21 +337,196 @@ export function StudioShell() {
         setError(message);
         return;
       }
-      const local = localPreviewHtml(prompt);
-      await sleep(Math.max(0, 720 - (Date.now() - started)));
-      if (id !== runId.current) return;
-      applyResult({
-        ...local,
-        assistantText: "Generator unavailable. Local layout applied.",
-        provider: "local",
-      });
+      pushAssistant(message);
       setError(message);
-      setBrief("");
-      setPanel("preview");
     }
   }
 
-  const sourceText = code || html;
+  const studioFiles = listStudioFiles(html, code);
+
+  const navRailProps = {
+    collapsed: railCollapsed,
+    onCollapsedChange: setRailCollapsed,
+    mobileOpen: mobileNavOpen,
+    onMobileOpenChange: setMobileNavOpen,
+    lastStarterId,
+    recents,
+    starredIds,
+    running,
+    onStarter: pickStarter,
+    onRecent: openRecent,
+    onToggleStar: toggleStar,
+  };
+
+  const chatPanel = (
+    <>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
+        <StudioNavRail {...navRailProps} />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+            {messages.length === 0 && !running ? (
+              <p className="text-sm text-subtle">Brief below, or pick a starter.</p>
+            ) : (
+              messages.map((m) => (
+                <div
+                  key={m.id}
+                  className={cn(
+                    "break-words rounded-xl px-3 py-2 text-sm leading-relaxed",
+                    m.role === "user"
+                      ? "ml-6 bg-accent text-accent-fg"
+                      : "mr-6 border border-border bg-card text-fg",
+                  )}
+                >
+                  {m.text}
+                  {m.role === "assistant" && m.files?.length
+                    ? m.files.map((f) => (
+                        <FileChip key={f.name} name={f.name} onClick={() => openStudioFile(f.name)} />
+                      ))
+                    : null}
+                </div>
+              ))
+            )}
+            {running ? (
+              <div ref={thinkRef}>
+                <ThinkingStatus
+                  brief={`${title} ${brief}`}
+                  mode={html ? "revise" : "create"}
+                />
+              </div>
+            ) : null}
+            {error ? <p className="text-xs text-muted">{error}</p> : null}
+          </div>
+        </div>
+      </div>
+      <form
+        className="shrink-0 border-t border-border p-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (running) stop();
+          else void run();
+        }}
+      >
+        <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+        <label className="sr-only" htmlFor="brief">
+          Brief
+        </label>
+        <textarea
+          id="brief"
+          name="brief"
+          rows={3}
+          value={brief}
+          onChange={(e) => setBrief(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              if (!running) void run();
+            }
+          }}
+          placeholder={
+            html
+              ? "Make the columns narrower…"
+              : "A personal kanban for a digital assistant…"
+          }
+          className="min-h-20 w-full resize-none rounded-xl border border-border bg-card px-3 py-2.5 text-sm leading-relaxed text-fg placeholder:text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+        />
+        <Button
+          type="submit"
+          className="mt-2 w-full"
+          disabled={!running && !brief.trim()}
+        >
+          {running ? (
+            <>
+              Stop
+              <Square className="size-3 fill-current" />
+            </>
+          ) : html ? (
+            <>
+              Upraviť
+              <PenLine className="size-4" />
+            </>
+          ) : (
+            <>
+              {online ? "Generate" : "Generate locally"}
+              <Send className="size-4" />
+            </>
+          )}
+        </Button>
+        </div>
+      </form>
+    </>
+  );
+
+  const sourcePanel = (
+    <StudioFilesPanel
+      files={studioFiles}
+      activeFile={activeFile}
+      onSelectFile={setActiveFile}
+      header={
+        <div className="flex h-12 shrink-0 items-center border-b border-border pl-3 pr-1">
+          <p className="min-w-0 truncate text-xs uppercase tracking-widest text-subtle">Code</p>
+        </div>
+      }
+    />
+  );
+
+  const configStarter = configStarterId ? getStarterById(configStarterId) : undefined;
+
+  const previewPanel = (
+    <>
+      <div className="flex h-12 shrink-0 items-center border-b border-border pl-3 pr-1">
+        <p className="min-w-0 truncate text-xs uppercase tracking-widest text-subtle">
+          {running
+            ? html
+              ? "Upravujem"
+              : "Premýšľanie"
+            : configStarter
+              ? "Configure"
+              : online
+                ? "Live preview"
+                : "Saved preview"}
+        </p>
+      </div>
+      {configStarter && !running ? (
+        <StarterConfigCanvas
+          starter={configStarter}
+          selectedAddonIds={selectedAddonIds}
+          running={running}
+          online={online}
+          onToggleAddon={toggleConfigAddon}
+          onResetSelection={resetConfigSelection}
+          onGenerate={generateFromConfig}
+        />
+      ) : html ? (
+        <div className="relative min-h-0 flex-1">
+          <LivePreview html={html} title={title} />
+          {running ? (
+            <div className="pointer-events-none absolute bottom-4 left-4">
+              <ThinkingStatus
+                brief={`${title} ${brief}`}
+                variant="chip"
+                mode={html ? "revise" : "create"}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : running ? (
+        <PreviewPulseSkeleton />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
+          <p className="text-sm text-muted">
+            {online
+              ? "Pick a starter from the menu or write a brief to fill this canvas."
+              : "Offline. Generate a local layout, or reopen to restore the last preview."}
+          </p>
+          <ol className="max-w-xs space-y-1.5 text-left text-xs leading-relaxed text-subtle">
+            <li>1. Choose a starter and add-ons</li>
+            <li>2. Click Vytvoriť on the canvas</li>
+            <li>3. Revise without blanking the canvas</li>
+          </ol>
+        </div>
+      )}
+    </>
+  );
 
   return (
     <div
@@ -210,7 +546,7 @@ export function StudioShell() {
             Cozy
           </Link>
           {html ? (
-            <span className="hidden truncate text-xs text-muted sm:inline">{title}</span>
+            <span className="min-w-0 truncate text-xs text-muted">{title}</span>
           ) : null}
         </div>
         <div className="flex items-center gap-2">
@@ -223,204 +559,58 @@ export function StudioShell() {
               {providerLabel(status, provider)}
             </p>
           )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="hidden lg:inline-flex"
-            onClick={() => setShowSource((v) => !v)}
-          >
-            {showSource ? "Hide source" : "Source"}
-          </Button>
           <Button type="button" variant="ghost" size="sm" onClick={() => reset()}>
             New
           </Button>
+          <StudioOverflowMenu
+            html={html}
+            title={title}
+            showSource={showSource}
+            onToggleSource={() => setShowSource((v) => !v)}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            running={running}
+            showModelPicker={online && Boolean(status?.mistral)}
+          />
         </div>
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <section
-          className={cn(
-            "min-h-0 w-full flex-col border-r border-border bg-surface lg:flex lg:w-80 lg:shrink-0 lg:flex-none",
-            panel === "chat" ? "flex min-h-0 flex-1" : "hidden lg:flex",
-          )}
-        >
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
-            {messages.length === 0 && !running ? (
-              <div className="space-y-3">
-                <p className="text-sm leading-relaxed text-muted">
-                  Describe a kanban, chat, habits grid, calendar, or notes tool.
-                  Generation runs on the server.
-                </p>
-                {!online ? (
-                  <p className="text-xs leading-relaxed text-subtle">
-                    Offline. Last preview stays on this device. Generate still
-                    builds a local layout.
-                  </p>
-                ) : null}
-              </div>
-            ) : (
-              messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={cn(
-                    "break-words rounded-xl px-3 py-2 text-sm leading-relaxed",
-                    m.role === "user"
-                      ? "ml-6 bg-accent text-accent-fg"
-                      : "mr-6 border border-border bg-card text-fg",
-                  )}
-                >
-                  {m.text}
-                </div>
-              ))
+        <div className="flex min-h-0 flex-1 lg:hidden">
+          <section
+            className={cn(
+              "flex min-h-0 w-full flex-col bg-surface",
+              panel === "chat" ? "min-h-0 flex-1" : "hidden",
             )}
-            {running ? (
-              <div ref={thinkRef}>
-                <ThinkingStatus
-                  brief={`${title} ${brief}`}
-                  mode={html ? "revise" : "create"}
-                />
-              </div>
-            ) : null}
-            {!running ? (
-              <div className="flex flex-wrap gap-2">
-                {STARTERS.map((s) => (
-                  <Button
-                    key={s.id}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={running}
-                    onClick={() => void run(s.prompt, { fresh: true })}
-                  >
-                    {s.label}
-                  </Button>
-                ))}
-              </div>
-            ) : null}
-            {error ? <p className="text-xs text-muted">{error}</p> : null}
-          </div>
-          <form
-            className="border-t border-border p-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (running) stop();
-              else void run();
-            }}
           >
-            <label className="sr-only" htmlFor="brief">
-              Brief
-            </label>
-            <textarea
-              id="brief"
-              name="brief"
-              rows={3}
-              value={brief}
-              onChange={(e) => setBrief(e.target.value)}
-              onKeyDown={(e) => {
-                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                  e.preventDefault();
-                  if (!running) void run();
-                }
-              }}
-              placeholder={
-                html
-                  ? "Make the columns narrower…"
-                  : "A personal kanban for a digital assistant…"
-              }
-              className="min-h-20 w-full resize-none rounded-xl border border-border bg-card px-3 py-2.5 text-sm leading-relaxed text-fg placeholder:text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-            />
-            <Button
-              type="submit"
-              className="mt-2 w-full"
-              disabled={!running && !brief.trim()}
-            >
-              {running ? (
-                <>
-                  Stop
-                  <Square className="size-3 fill-current" />
-                </>
-              ) : html ? (
-                <>
-                  Upraviť
-                  <PenLine className="size-4" />
-                </>
-              ) : (
-                <>
-                  {online ? "Generate" : "Generate locally"}
-                  <Send className="size-4" />
-                </>
-              )}
-            </Button>
-          </form>
-        </section>
+            {chatPanel}
+          </section>
 
-        <section
-          className={cn(
-            "min-h-0 min-w-0 flex-col border-r border-border bg-canvas",
-            panel === "code" ? "flex min-h-0 flex-1" : "hidden",
-            showSource ? "lg:flex lg:w-[42%] lg:shrink-0 lg:flex-none" : "lg:hidden",
-          )}
-        >
-          <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border pl-3 pr-1">
-            <p className="min-w-0 truncate text-xs uppercase tracking-widest text-subtle">Source</p>
-            <ExportActions html={sourceText} title={title} />
-          </div>
-          <pre className="min-h-0 flex-1 overflow-auto p-4 font-mono text-xs leading-relaxed text-muted">
-            {code || "Source appears after a generate."}
-          </pre>
-        </section>
+          <section
+            className={cn(
+              "flex min-h-0 min-w-0 flex-col bg-canvas",
+              panel === "code" ? "min-h-0 flex-1" : "hidden",
+            )}
+          >
+            {sourcePanel}
+          </section>
 
-        <section
-          className={cn(
-            "min-h-0 min-w-0 flex-1 flex-col bg-canvas lg:flex",
-            panel === "preview" ? "flex" : "hidden lg:flex",
-          )}
-        >
-          <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border pl-3 pr-1">
-            <p className="min-w-0 truncate text-xs uppercase tracking-widest text-subtle">
-              {running
-                ? html
-                  ? "Upravujem"
-                  : "Premýšľanie"
-                : online
-                  ? "Live preview"
-                  : "Saved preview"}
-            </p>
-            <ExportActions html={html} title={title} />
-          </div>
-          {html ? (
-            <div className="relative min-h-0 flex-1">
-              <LivePreview html={html} title={title} />
-              {running ? (
-                <div className="pointer-events-none absolute bottom-4 left-4">
-                  <ThinkingStatus
-                    brief={`${title} ${brief}`}
-                    variant="chip"
-                    mode={html ? "revise" : "create"}
-                  />
-                </div>
-              ) : null}
-            </div>
-          ) : running ? (
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6">
-              <ThinkingStatus brief={`${title} ${brief}`} variant="stage" mode="create" />
-            </div>
-          ) : (
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-              <p className="text-sm text-muted">
-                {online
-                  ? "Pick a starter or write a brief to fill this canvas."
-                  : "Offline. Generate a local layout, or reopen to restore the last preview."}
-              </p>
-              <ol className="max-w-xs space-y-1.5 text-left text-xs leading-relaxed text-subtle">
-                <li>1. Brief or starter</li>
-                <li>2. Generate on the server</li>
-                <li>3. Revise without blanking the canvas</li>
-              </ol>
-            </div>
-          )}
-        </section>
+          <section
+            className={cn(
+              "flex min-h-0 min-w-0 flex-col bg-canvas",
+              panel === "preview" ? "min-h-0 flex-1" : "hidden",
+            )}
+          >
+            {previewPanel}
+          </section>
+        </div>
+
+        <StudioDesktopSplit
+          showSource={showSource}
+          chat={chatPanel}
+          source={sourcePanel}
+          preview={previewPanel}
+        />
       </div>
 
       <nav className="grid shrink-0 grid-cols-3 border-t border-border bg-surface lg:hidden">
