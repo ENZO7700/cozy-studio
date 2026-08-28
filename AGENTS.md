@@ -1,3 +1,7 @@
+> **Product:** This workspace is **Cozy AI Studio** ([ENZO7700/cozy-studio](https://github.com/ENZO7700/cozy-studio)) — brief → one HTML blob → srcdoc iframe preview at `/studio`.
+> **Not canvas.h4ck3d.me** (G0/G1/G2, HitL, `/a/:id` live elsewhere).
+> Everything below is the Grok App Builder sandbox contract for this repo’s dev environment.
+
 # App Builder Workspace
 
 **The single source of truth** for the App Builder sandbox contract. You are
