@@ -3,11 +3,9 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  Home,
   LayoutGrid,
   Menu,
   MessageSquare,
-  Plus,
   Search,
   Star,
   StickyNote,
@@ -35,7 +33,6 @@ type StudioNavRailProps = {
   recents: StudioRecent[];
   starredIds: Set<string>;
   running: boolean;
-  onNew: () => void;
   onStarter: (starter: Starter) => void;
   onRecent: (recent: StudioRecent) => void;
   onToggleStar: (id: string) => void;
@@ -101,7 +98,6 @@ function RailBody({
   recents,
   starredIds,
   running,
-  onNew,
   onStarter,
   onRecent,
   onToggleStar,
@@ -112,7 +108,6 @@ function RailBody({
   recents: StudioRecent[];
   starredIds: Set<string>;
   running: boolean;
-  onNew: () => void;
   onStarter: (starter: Starter) => void;
   onRecent: (recent: StudioRecent) => void;
   onToggleStar: (id: string) => void;
@@ -127,8 +122,7 @@ function RailBody({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-2">
       <nav className="space-y-0.5" aria-label="Studio">
-        <button
-          type="button"
+        <div
           className={cn(
             "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm",
             collapsed && "justify-center px-1.5",
@@ -136,9 +130,8 @@ function RailBody({
           )}
           aria-current="page"
         >
-          <Home className="size-4 shrink-0" aria-hidden />
-          {!collapsed ? <span>Studio</span> : null}
-        </button>
+          {!collapsed ? <span>Studio</span> : <span className="font-serif text-xs text-accent">S</span>}
+        </div>
         <button
           type="button"
           onClick={onSearchOpen}
@@ -156,19 +149,6 @@ function RailBody({
               </kbd>
             </>
           ) : null}
-        </button>
-        <button
-          type="button"
-          disabled={running}
-          onClick={onNew}
-          className={cn(
-            "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm text-muted transition-colors hover:bg-card hover:text-fg",
-            collapsed && "justify-center px-1.5",
-            running && "opacity-50",
-          )}
-        >
-          <Plus className="size-4 shrink-0" aria-hidden />
-          {!collapsed ? <span>New</span> : null}
         </button>
       </nav>
 
