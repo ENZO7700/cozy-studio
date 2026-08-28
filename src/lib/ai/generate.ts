@@ -3,6 +3,23 @@ import { injectCozyElements } from "@/lib/preview/cozy-elements";
 
 export type AiProvider = "mistral" | "grok";
 
+export const MISTRAL_MODELS = [
+  { id: "mistral-medium-latest", label: "Mistral Medium 3.5" },
+  { id: "mistral-large-latest", label: "Large 3" },
+  { id: "mistral-small-latest", label: "Small 4" },
+  { id: "codestral-latest", label: "Codestral" },
+  { id: "ministral-14b-latest", label: "Ministral 3 14B" },
+] as const;
+
+export type MistralModelId = (typeof MISTRAL_MODELS)[number]["id"];
+
+export const DEFAULT_CREATE_MODEL: MistralModelId = "codestral-latest";
+export const DEFAULT_REVISE_MODEL: MistralModelId = "mistral-medium-latest";
+
+const MISTRAL_MODEL_IDS = new Set<string>(MISTRAL_MODELS.map((m) => m.id));
+
+const MAX_TOKENS = 16_384;
+
 export type GenerateResult =
   | {
       ok: true;
@@ -17,6 +34,8 @@ export type GenerateResult =
 export type AiStatus = {
   mistral: boolean;
   grok: boolean;
+  defaultCreateModel: MistralModelId;
+  defaultReviseModel: MistralModelId;
 };
 
 const WC =
@@ -47,6 +66,13 @@ function mistralKey(): string | null {
   const multi = (process.env.MISTRAL_API_KEYS ?? "").split(",")[0]?.trim();
   const single = (process.env.MISTRAL_API_KEY ?? process.env.MISTRAL_KEY ?? "").trim();
   return multi || single || null;
+}
+
+function resolveModel(requested: string | undefined, revising: boolean): MistralModelId {
+  if (requested && MISTRAL_MODEL_IDS.has(requested)) {
+    return requested as MistralModelId;
+  }
+  return revising ? DEFAULT_REVISE_MODEL : DEFAULT_CREATE_MODEL;
 }
 
 function formatProviderError(name: string, status: number, raw: string): string {
@@ -115,17 +141,24 @@ function pack(text: string, provider: AiProvider, model: string): GenerateResult
   };
 }
 
+function mistralModelLabel(id: string): string {
+  return MISTRAL_MODELS.find((m) => m.id === id)?.label ?? id;
+}
+
 export const getAiStatus = createServerFn({ method: "GET" }).handler(
   async (): Promise<AiStatus> => ({
     mistral: Boolean(mistralKey()),
     grok: Boolean(process.env.XAI_API_KEY),
+    defaultCreateModel: DEFAULT_CREATE_MODEL,
+    defaultReviseModel: DEFAULT_REVISE_MODEL,
   }),
 );
 
 export const generatePreview = createServerFn({ method: "POST" })
-  .validator((input: { prompt: string; html?: string }) => ({
+  .validator((input: { prompt: string; html?: string; model?: string }) => ({
     prompt: String(input?.prompt ?? "").slice(0, 4000),
     html: String(input?.html ?? "").slice(0, 16000),
+    model: input?.model ? String(input.model).slice(0, 64) : undefined,
   }))
   .handler(async ({ data }): Promise<GenerateResult> => {
     const revising = Boolean(data.html);
@@ -133,6 +166,7 @@ export const generatePreview = createServerFn({ method: "POST" })
     const prompt = revising
       ? `Change request:\n${data.prompt || "Tighten the layout."}\n\nCurrent HTML:\n${data.html}`
       : data.prompt || "A calm personal studio landing page.";
+    const model = resolveModel(data.model, revising);
     const errors: string[] = [];
 
     const mk = mistralKey();
@@ -140,13 +174,13 @@ export const generatePreview = createServerFn({ method: "POST" })
       const mistral = await complete({
         url: "https://api.mistral.ai/v1/chat/completions",
         key: mk,
-        model: "codestral-latest",
+        model,
         system,
         prompt,
-        maxTokens: 4096,
+        maxTokens: MAX_TOKENS,
       });
       if (mistral.ok) {
-        const packed = pack(mistral.text, "mistral", "codestral-latest");
+        const packed = pack(mistral.text, "mistral", model);
         if (packed.ok) return packed;
         errors.push(packed.error);
       } else {
@@ -162,7 +196,7 @@ export const generatePreview = createServerFn({ method: "POST" })
         model: "grok-4.5",
         system,
         prompt,
-        maxTokens: 4096,
+        maxTokens: MAX_TOKENS,
       });
       if (grok.ok) {
         const packed = pack(grok.text, "grok", "grok-4.5");
@@ -178,3 +212,5 @@ export const generatePreview = createServerFn({ method: "POST" })
       error: errors[0] || "No AI provider is configured",
     };
   });
+
+export { mistralModelLabel };

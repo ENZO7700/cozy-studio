@@ -6,7 +6,16 @@ import { ExportActions } from "@/components/studio/ExportActions";
 import { LivePreview } from "@/components/studio/LivePreview";
 import { ThinkingStatus } from "@/components/studio/ThinkingStatus";
 import { cn } from "@/lib/utils";
-import { generatePreview, getAiStatus, type AiStatus } from "@/lib/ai/generate";
+import {
+  DEFAULT_CREATE_MODEL,
+  DEFAULT_REVISE_MODEL,
+  generatePreview,
+  getAiStatus,
+  MISTRAL_MODELS,
+  mistralModelLabel,
+  type AiStatus,
+  type MistralModelId,
+} from "@/lib/ai/generate";
 import { localPreviewHtml } from "@/lib/preview/local-templates";
 import { STARTERS } from "@/lib/preview/starters";
 import {
@@ -54,6 +63,7 @@ export function StudioShell() {
   const [panel, setPanel] = useState<MobilePanel>("chat");
   const [showSource, setShowSource] = useState(false);
   const [status, setStatus] = useState<AiStatus | null>(null);
+  const [selectedModel, setSelectedModel] = useState<MistralModelId>(DEFAULT_CREATE_MODEL);
   const online = useOnline();
   const thinkRef = useRef<HTMLDivElement>(null);
   const runId = useRef(0);
@@ -61,6 +71,10 @@ export function StudioShell() {
   useEffect(() => {
     void getAiStatus().then(setStatus);
   }, []);
+
+  useEffect(() => {
+    setSelectedModel(html ? DEFAULT_REVISE_MODEL : DEFAULT_CREATE_MODEL);
+  }, [html]);
 
   useEffect(() => {
     if (!html) return;
@@ -134,7 +148,11 @@ export function StudioShell() {
     }
     try {
       const remote = await generatePreview({
-        data: { prompt, html: revising ? currentHtml : "" },
+        data: {
+          prompt,
+          html: revising ? currentHtml : "",
+          model: selectedModel,
+        },
       });
       if (id !== runId.current) return;
       if (remote.ok) {
@@ -145,7 +163,7 @@ export function StudioShell() {
           assistantText: revising
             ? "Updated the board."
             : remote.provider === "mistral"
-              ? "Preview generated with Mistral Codestral."
+              ? `Preview generated with ${mistralModelLabel(remote.model)}.`
               : "Preview generated with Grok.",
           provider: remote.provider,
         });
@@ -308,6 +326,30 @@ export function StudioShell() {
               else void run();
             }}
           >
+            {online && status?.mistral ? (
+              <div className="mb-2">
+                <label
+                  htmlFor="mistral-model"
+                  className="mb-1 block text-xs uppercase tracking-wider text-subtle"
+                >
+                  Model
+                </label>
+                <select
+                  id="mistral-model"
+                  name="mistral-model"
+                  value={selectedModel}
+                  disabled={running}
+                  onChange={(e) => setSelectedModel(e.target.value as MistralModelId)}
+                  className="w-full rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                >
+                  {MISTRAL_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <label className="sr-only" htmlFor="brief">
               Brief
             </label>
