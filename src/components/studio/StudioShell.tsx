@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Code2, Eye, MessageSquare, PenLine, Send, Square } from "lucide-react";
+import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { ExportActions } from "@/components/studio/ExportActions";
 import { LivePreview } from "@/components/studio/LivePreview";
@@ -27,6 +28,88 @@ import { useOnline } from "@/lib/pwa/use-online";
 import { useStudioStore } from "@/stores/studio-store";
 
 type MobilePanel = "chat" | "code" | "preview";
+
+const SPLIT_STORAGE_ID = "cozy-studio-split";
+
+function StudioResizeHandle() {
+  return (
+    <Separator
+      className={cn(
+        "relative z-10 -mx-1.5 flex w-3 shrink-0 items-stretch",
+        "cursor-col-resize touch-none",
+        "before:absolute before:inset-y-0 before:left-1/2 before:w-px before:-translate-x-1/2 before:bg-border before:transition-colors",
+        "hover:before:bg-accent/70 data-[separator=active]:before:bg-accent data-[separator=focus]:before:bg-accent/70",
+      )}
+    />
+  );
+}
+
+const panelFlexStyle = { overflow: "hidden" } as const;
+
+function StudioDesktopSplit({
+  showSource,
+  chat,
+  source,
+  preview,
+}: {
+  showSource: boolean;
+  chat: ReactNode;
+  source: ReactNode;
+  preview: ReactNode;
+}) {
+  const panelIds = showSource ? (["chat", "source", "preview"] as const) : (["chat", "preview"] as const);
+  const { defaultLayout, onLayoutChanged } = useDefaultLayout({
+    id: SPLIT_STORAGE_ID,
+    panelIds: [...panelIds],
+  });
+
+  return (
+    <Group
+      id={SPLIT_STORAGE_ID}
+      orientation="horizontal"
+      className="hidden min-h-0 h-full w-full flex-1 lg:flex"
+      defaultLayout={defaultLayout}
+      onLayoutChanged={onLayoutChanged}
+    >
+      <Panel
+        id="chat"
+        minSize={8}
+        collapsible
+        defaultSize={showSource ? "18" : "22"}
+        className="flex h-full min-h-0 flex-col bg-surface"
+        style={panelFlexStyle}
+      >
+        {chat}
+      </Panel>
+      <StudioResizeHandle />
+      {showSource ? (
+        <>
+          <Panel
+            id="source"
+            minSize={8}
+            collapsible
+            defaultSize="42"
+            className="flex h-full min-h-0 flex-col bg-canvas"
+            style={panelFlexStyle}
+          >
+            {source}
+          </Panel>
+          <StudioResizeHandle />
+        </>
+      ) : null}
+      <Panel
+        id="preview"
+        minSize={8}
+        collapsible
+        defaultSize={showSource ? "40" : "78"}
+        className="flex h-full min-h-0 flex-col bg-canvas"
+        style={panelFlexStyle}
+      >
+        {preview}
+      </Panel>
+    </Group>
+  );
+}
 
 function providerLabel(status: AiStatus | null, used: string | null): string {
   if (used === "mistral") return "Mistral";
@@ -210,6 +293,203 @@ export function StudioShell() {
 
   const sourceText = code || html;
 
+  const chatPanel = (
+    <>
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+        {messages.length === 0 && !running ? (
+          <div className="space-y-3">
+            <p className="text-sm leading-relaxed text-muted">
+              Describe a kanban, chat, habits grid, calendar, or notes tool.
+              Generation runs on the server.
+            </p>
+            {!online ? (
+              <p className="text-xs leading-relaxed text-subtle">
+                Offline. Last preview stays on this device. Generate still
+                builds a local layout.
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          messages.map((m) => (
+            <div
+              key={m.id}
+              className={cn(
+                "break-words rounded-xl px-3 py-2 text-sm leading-relaxed",
+                m.role === "user"
+                  ? "ml-6 bg-accent text-accent-fg"
+                  : "mr-6 border border-border bg-card text-fg",
+              )}
+            >
+              {m.text}
+            </div>
+          ))
+        )}
+        {running ? (
+          <div ref={thinkRef}>
+            <ThinkingStatus
+              brief={`${title} ${brief}`}
+              mode={html ? "revise" : "create"}
+            />
+          </div>
+        ) : null}
+        {!running ? (
+          <div className="flex flex-wrap gap-2">
+            {STARTERS.map((s) => (
+              <Button
+                key={s.id}
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={running}
+                onClick={() => void run(s.prompt, { fresh: true })}
+              >
+                {s.label}
+              </Button>
+            ))}
+          </div>
+        ) : null}
+        {error ? <p className="text-xs text-muted">{error}</p> : null}
+      </div>
+      <form
+        className="shrink-0 border-t border-border p-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (running) stop();
+          else void run();
+        }}
+      >
+        {online && status?.mistral ? (
+          <div className="mb-2">
+            <label
+              htmlFor="mistral-model"
+              className="mb-1 block text-xs uppercase tracking-wider text-subtle"
+            >
+              Model
+            </label>
+            <select
+              id="mistral-model"
+              name="mistral-model"
+              value={selectedModel}
+              disabled={running}
+              onChange={(e) => setSelectedModel(e.target.value as MistralModelId)}
+              className="w-full rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+            >
+              {MISTRAL_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+        <label className="sr-only" htmlFor="brief">
+          Brief
+        </label>
+        <textarea
+          id="brief"
+          name="brief"
+          rows={3}
+          value={brief}
+          onChange={(e) => setBrief(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              if (!running) void run();
+            }
+          }}
+          placeholder={
+            html
+              ? "Make the columns narrower…"
+              : "A personal kanban for a digital assistant…"
+          }
+          className="min-h-20 w-full resize-none rounded-xl border border-border bg-card px-3 py-2.5 text-sm leading-relaxed text-fg placeholder:text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+        />
+        <Button
+          type="submit"
+          className="mt-2 w-full"
+          disabled={!running && !brief.trim()}
+        >
+          {running ? (
+            <>
+              Stop
+              <Square className="size-3 fill-current" />
+            </>
+          ) : html ? (
+            <>
+              Upraviť
+              <PenLine className="size-4" />
+            </>
+          ) : (
+            <>
+              {online ? "Generate" : "Generate locally"}
+              <Send className="size-4" />
+            </>
+          )}
+        </Button>
+      </form>
+    </>
+  );
+
+  const sourcePanel = (
+    <>
+      <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border pl-3 pr-1">
+        <p className="min-w-0 truncate text-xs uppercase tracking-widest text-subtle">Source</p>
+        <ExportActions html={sourceText} title={title} />
+      </div>
+      <pre className="min-h-0 flex-1 overflow-auto p-4 font-mono text-xs leading-relaxed text-muted">
+        {code || "Source appears after a generate."}
+      </pre>
+    </>
+  );
+
+  const previewPanel = (
+    <>
+      <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border pl-3 pr-1">
+        <p className="min-w-0 truncate text-xs uppercase tracking-widest text-subtle">
+          {running
+            ? html
+              ? "Upravujem"
+              : "Premýšľanie"
+            : online
+              ? "Live preview"
+              : "Saved preview"}
+        </p>
+        <ExportActions html={html} title={title} />
+      </div>
+      {html ? (
+        <div className="relative min-h-0 flex-1">
+          <LivePreview html={html} title={title} />
+          {running ? (
+            <div className="pointer-events-none absolute bottom-4 left-4">
+              <ThinkingStatus
+                brief={`${title} ${brief}`}
+                variant="chip"
+                mode={html ? "revise" : "create"}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : running ? (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6">
+          <ThinkingStatus brief={`${title} ${brief}`} variant="stage" mode="create" />
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
+          <p className="text-sm text-muted">
+            {online
+              ? "Pick a starter or write a brief to fill this canvas."
+              : "Offline. Generate a local layout, or reopen to restore the last preview."}
+          </p>
+          <ol className="max-w-xs space-y-1.5 text-left text-xs leading-relaxed text-subtle">
+            <li>1. Brief or starter</li>
+            <li>2. Generate on the server</li>
+            <li>3. Revise without blanking the canvas</li>
+          </ol>
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div
       className="flex h-dvh flex-col bg-bg text-fg"
@@ -257,212 +537,41 @@ export function StudioShell() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <section
-          className={cn(
-            "min-h-0 w-full flex-col border-r border-border bg-surface lg:flex lg:w-80 lg:shrink-0 lg:flex-none",
-            panel === "chat" ? "flex min-h-0 flex-1" : "hidden lg:flex",
-          )}
-        >
-          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
-            {messages.length === 0 && !running ? (
-              <div className="space-y-3">
-                <p className="text-sm leading-relaxed text-muted">
-                  Describe a kanban, chat, habits grid, calendar, or notes tool.
-                  Generation runs on the server.
-                </p>
-                {!online ? (
-                  <p className="text-xs leading-relaxed text-subtle">
-                    Offline. Last preview stays on this device. Generate still
-                    builds a local layout.
-                  </p>
-                ) : null}
-              </div>
-            ) : (
-              messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={cn(
-                    "break-words rounded-xl px-3 py-2 text-sm leading-relaxed",
-                    m.role === "user"
-                      ? "ml-6 bg-accent text-accent-fg"
-                      : "mr-6 border border-border bg-card text-fg",
-                  )}
-                >
-                  {m.text}
-                </div>
-              ))
+        <div className="flex min-h-0 flex-1 lg:hidden">
+          <section
+            className={cn(
+              "flex min-h-0 w-full flex-col bg-surface",
+              panel === "chat" ? "min-h-0 flex-1" : "hidden",
             )}
-            {running ? (
-              <div ref={thinkRef}>
-                <ThinkingStatus
-                  brief={`${title} ${brief}`}
-                  mode={html ? "revise" : "create"}
-                />
-              </div>
-            ) : null}
-            {!running ? (
-              <div className="flex flex-wrap gap-2">
-                {STARTERS.map((s) => (
-                  <Button
-                    key={s.id}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={running}
-                    onClick={() => void run(s.prompt, { fresh: true })}
-                  >
-                    {s.label}
-                  </Button>
-                ))}
-              </div>
-            ) : null}
-            {error ? <p className="text-xs text-muted">{error}</p> : null}
-          </div>
-          <form
-            className="border-t border-border p-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (running) stop();
-              else void run();
-            }}
           >
-            {online && status?.mistral ? (
-              <div className="mb-2">
-                <label
-                  htmlFor="mistral-model"
-                  className="mb-1 block text-xs uppercase tracking-wider text-subtle"
-                >
-                  Model
-                </label>
-                <select
-                  id="mistral-model"
-                  name="mistral-model"
-                  value={selectedModel}
-                  disabled={running}
-                  onChange={(e) => setSelectedModel(e.target.value as MistralModelId)}
-                  className="w-full rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-                >
-                  {MISTRAL_MODELS.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : null}
-            <label className="sr-only" htmlFor="brief">
-              Brief
-            </label>
-            <textarea
-              id="brief"
-              name="brief"
-              rows={3}
-              value={brief}
-              onChange={(e) => setBrief(e.target.value)}
-              onKeyDown={(e) => {
-                if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                  e.preventDefault();
-                  if (!running) void run();
-                }
-              }}
-              placeholder={
-                html
-                  ? "Make the columns narrower…"
-                  : "A personal kanban for a digital assistant…"
-              }
-              className="min-h-20 w-full resize-none rounded-xl border border-border bg-card px-3 py-2.5 text-sm leading-relaxed text-fg placeholder:text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-            />
-            <Button
-              type="submit"
-              className="mt-2 w-full"
-              disabled={!running && !brief.trim()}
-            >
-              {running ? (
-                <>
-                  Stop
-                  <Square className="size-3 fill-current" />
-                </>
-              ) : html ? (
-                <>
-                  Upraviť
-                  <PenLine className="size-4" />
-                </>
-              ) : (
-                <>
-                  {online ? "Generate" : "Generate locally"}
-                  <Send className="size-4" />
-                </>
-              )}
-            </Button>
-          </form>
-        </section>
+            {chatPanel}
+          </section>
 
-        <section
-          className={cn(
-            "min-h-0 min-w-0 flex-col border-r border-border bg-canvas",
-            panel === "code" ? "flex min-h-0 flex-1" : "hidden",
-            showSource ? "lg:flex lg:w-[42%] lg:shrink-0 lg:flex-none" : "lg:hidden",
-          )}
-        >
-          <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border pl-3 pr-1">
-            <p className="min-w-0 truncate text-xs uppercase tracking-widest text-subtle">Source</p>
-            <ExportActions html={sourceText} title={title} />
-          </div>
-          <pre className="min-h-0 flex-1 overflow-auto p-4 font-mono text-xs leading-relaxed text-muted">
-            {code || "Source appears after a generate."}
-          </pre>
-        </section>
+          <section
+            className={cn(
+              "flex min-h-0 min-w-0 flex-col bg-canvas",
+              panel === "code" ? "min-h-0 flex-1" : "hidden",
+            )}
+          >
+            {sourcePanel}
+          </section>
 
-        <section
-          className={cn(
-            "min-h-0 min-w-0 flex-1 flex-col bg-canvas lg:flex",
-            panel === "preview" ? "flex" : "hidden lg:flex",
-          )}
-        >
-          <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border pl-3 pr-1">
-            <p className="min-w-0 truncate text-xs uppercase tracking-widest text-subtle">
-              {running
-                ? html
-                  ? "Upravujem"
-                  : "Premýšľanie"
-                : online
-                  ? "Live preview"
-                  : "Saved preview"}
-            </p>
-            <ExportActions html={html} title={title} />
-          </div>
-          {html ? (
-            <div className="relative min-h-0 flex-1">
-              <LivePreview html={html} title={title} />
-              {running ? (
-                <div className="pointer-events-none absolute bottom-4 left-4">
-                  <ThinkingStatus
-                    brief={`${title} ${brief}`}
-                    variant="chip"
-                    mode={html ? "revise" : "create"}
-                  />
-                </div>
-              ) : null}
-            </div>
-          ) : running ? (
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6">
-              <ThinkingStatus brief={`${title} ${brief}`} variant="stage" mode="create" />
-            </div>
-          ) : (
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-              <p className="text-sm text-muted">
-                {online
-                  ? "Pick a starter or write a brief to fill this canvas."
-                  : "Offline. Generate a local layout, or reopen to restore the last preview."}
-              </p>
-              <ol className="max-w-xs space-y-1.5 text-left text-xs leading-relaxed text-subtle">
-                <li>1. Brief or starter</li>
-                <li>2. Generate on the server</li>
-                <li>3. Revise without blanking the canvas</li>
-              </ol>
-            </div>
-          )}
-        </section>
+          <section
+            className={cn(
+              "flex min-h-0 min-w-0 flex-col bg-canvas",
+              panel === "preview" ? "min-h-0 flex-1" : "hidden",
+            )}
+          >
+            {previewPanel}
+          </section>
+        </div>
+
+        <StudioDesktopSplit
+          showSource={showSource}
+          chat={chatPanel}
+          source={sourcePanel}
+          preview={previewPanel}
+        />
       </div>
 
       <nav className="grid shrink-0 grid-cols-3 border-t border-border bg-surface lg:hidden">
