@@ -35,6 +35,7 @@ import {
   type StudioRecent,
 } from "@/lib/studio/recents";
 import { fileRefs, listStudioFiles } from "@/lib/studio/files";
+import { shouldApplyLocalPreviewOnFailure } from "@/lib/studio/run-failure";
 import {
   clearOfflinePreview,
   persistOfflinePreview,
@@ -261,7 +262,7 @@ export function StudioShell() {
     pushUser(prompt);
     const started = Date.now();
     if (!online) {
-      if (revising) {
+      if (!shouldApplyLocalPreviewOnFailure(online, revising)) {
         await sleep(Math.max(0, 700 - (Date.now() - started)));
         if (id !== runId.current) return;
         pushAssistant("Offline. Preview unchanged.");
@@ -327,24 +328,8 @@ export function StudioShell() {
         setError(remote.error);
         return;
       }
-      const local = localPreviewHtml(prompt);
-      await sleep(Math.max(0, 720 - (Date.now() - started)));
-      if (id !== runId.current) return;
-      applyResult({
-        ...local,
-        assistantText: `${remote.error}. Local layout applied.`,
-        provider: "local",
-        files: fileRefs(local.html, local.code),
-      });
-      setActiveFile("index.html");
-      recordGeneration({
-        title: local.title,
-        code: local.code,
-        html: local.html,
-        brief: prompt,
-      });
-      setBrief("");
-      setPanel("preview");
+      pushAssistant(remote.error);
+      setError(remote.error);
     } catch (e) {
       if (id !== runId.current) return;
       const message = e instanceof Error ? e.message : "Generate failed";
@@ -353,25 +338,8 @@ export function StudioShell() {
         setError(message);
         return;
       }
-      const local = localPreviewHtml(prompt);
-      await sleep(Math.max(0, 720 - (Date.now() - started)));
-      if (id !== runId.current) return;
-      applyResult({
-        ...local,
-        assistantText: "Generator unavailable. Local layout applied.",
-        provider: "local",
-        files: fileRefs(local.html, local.code),
-      });
-      setActiveFile("index.html");
-      recordGeneration({
-        title: local.title,
-        code: local.code,
-        html: local.html,
-        brief: prompt,
-      });
+      pushAssistant(message);
       setError(message);
-      setBrief("");
-      setPanel("preview");
     }
   }
 
