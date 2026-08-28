@@ -5,6 +5,7 @@ export type StudioMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
+  files?: { name: string }[];
 };
 
 export type StudioProvider = "mistral" | "grok" | "local" | null;
@@ -27,6 +28,7 @@ type StudioState = {
     html: string;
     assistantText: string;
     provider: StudioProvider;
+    files?: { name: string }[];
   }) => void;
   setError: (error: string | null) => void;
   hydratePreview: (opts: { title: string; code: string; html: string }) => void;
@@ -89,7 +91,7 @@ export const useStudioStore = create<StudioState>()(
             },
           ].slice(-24),
         })),
-      applyResult: ({ title, code, html, assistantText, provider }) =>
+      applyResult: ({ title, code, html, assistantText, provider, files }) =>
         set((s) => ({
           title,
           code,
@@ -103,6 +105,7 @@ export const useStudioStore = create<StudioState>()(
               id: crypto.randomUUID(),
               role: "assistant" as const,
               text: assistantText,
+              files,
             },
           ].slice(-24),
         })),

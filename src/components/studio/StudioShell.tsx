@@ -3,7 +3,9 @@ import { Link } from "@tanstack/react-router";
 import { Code2, Eye, MessageSquare, PenLine, Send, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ExportActions } from "@/components/studio/ExportActions";
+import { FileChip, StudioFilesPanel } from "@/components/studio/StudioFilesPanel";
 import { LivePreview } from "@/components/studio/LivePreview";
+import { PreviewPulseSkeleton } from "@/components/studio/PreviewPulseSkeleton";
 import { StarterConfigCanvas } from "@/components/studio/StarterConfigCanvas";
 import { StudioDesktopSplit } from "@/components/studio/StudioDesktopSplit";
 import { StudioNavRail } from "@/components/studio/StudioNavRail";
@@ -32,6 +34,7 @@ import {
   toggleStarred,
   type StudioRecent,
 } from "@/lib/studio/recents";
+import { fileRefs, listStudioFiles } from "@/lib/studio/files";
 import {
   clearOfflinePreview,
   persistOfflinePreview,
@@ -94,6 +97,7 @@ export function StudioShell() {
   const [starredIds, setStarredIds] = useState<Set<string>>(() => loadStarredIds());
   const [configStarterId, setConfigStarterId] = useState<string | null>(null);
   const [selectedAddonIds, setSelectedAddonIds] = useState<Set<string>>(() => new Set());
+  const [activeFile, setActiveFile] = useState<string | null>(null);
   const online = useOnline();
   const thinkRef = useRef<HTMLDivElement>(null);
   const runId = useRef(0);
@@ -133,9 +137,24 @@ export function StudioShell() {
     thinkRef.current?.scrollIntoView({ block: "nearest" });
   }, [running, messages.length]);
 
+  useEffect(() => {
+    const files = listStudioFiles(html, code);
+    if (!files.length) return;
+    setActiveFile((current) => {
+      if (current && files.some((f) => f.name === current)) return current;
+      return files[0]!.name;
+    });
+  }, [html, code]);
+
   function stop() {
     runId.current += 1;
     setRunning(false);
+  }
+
+  function openStudioFile(name: string) {
+    setActiveFile(name);
+    setShowSource(true);
+    setPanel("code");
   }
 
   function reset() {
@@ -146,6 +165,7 @@ export function StudioShell() {
     setMobileNavOpen(false);
     setConfigStarterId(null);
     setSelectedAddonIds(new Set());
+    setActiveFile(null);
     void clearOfflinePreview();
   }
 
@@ -216,6 +236,7 @@ export function StudioShell() {
         html: recent.html,
         brief: recent.brief,
       });
+      setActiveFile("index.html");
       setPanel("preview");
       return;
     }
@@ -253,7 +274,9 @@ export function StudioShell() {
         ...local,
         assistantText: "Offline. Local layout saved on this device.",
         provider: "local",
+        files: fileRefs(local.html, local.code),
       });
+      setActiveFile("index.html");
       recordGeneration({
         title: local.title,
         code: local.code,
@@ -284,7 +307,9 @@ export function StudioShell() {
               ? `Preview generated with ${mistralModelLabel(remote.model)}.`
               : "Preview generated with Grok.",
           provider: remote.provider,
+          files: fileRefs(remote.html, remote.code),
         });
+        setActiveFile("index.html");
         if (!revising) {
           recordGeneration({
             title: remote.title,
@@ -309,7 +334,9 @@ export function StudioShell() {
         ...local,
         assistantText: `${remote.error}. Local layout applied.`,
         provider: "local",
+        files: fileRefs(local.html, local.code),
       });
+      setActiveFile("index.html");
       recordGeneration({
         title: local.title,
         code: local.code,
@@ -333,7 +360,9 @@ export function StudioShell() {
         ...local,
         assistantText: "Generator unavailable. Local layout applied.",
         provider: "local",
+        files: fileRefs(local.html, local.code),
       });
+      setActiveFile("index.html");
       recordGeneration({
         title: local.title,
         code: local.code,
@@ -347,6 +376,7 @@ export function StudioShell() {
   }
 
   const sourceText = code || html;
+  const studioFiles = listStudioFiles(html, code);
 
   const navRailProps = {
     collapsed: railCollapsed,
@@ -370,18 +400,7 @@ export function StudioShell() {
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
             {messages.length === 0 && !running ? (
-              <div className="space-y-3">
-                <p className="text-sm leading-relaxed text-muted">
-                  Describe a kanban, chat, habits grid, calendar, or notes tool.
-                  Generation runs on the server.
-                </p>
-                {!online ? (
-                  <p className="text-xs leading-relaxed text-subtle">
-                    Offline. Last preview stays on this device. Generate still
-                    builds a local layout.
-                  </p>
-                ) : null}
-              </div>
+              <p className="text-sm text-subtle">Brief below, or pick a starter.</p>
             ) : (
               messages.map((m) => (
                 <div
@@ -394,6 +413,11 @@ export function StudioShell() {
                   )}
                 >
                   {m.text}
+                  {m.role === "assistant" && m.files?.length
+                    ? m.files.map((f) => (
+                        <FileChip key={f.name} name={f.name} onClick={() => openStudioFile(f.name)} />
+                      ))
+                    : null}
                 </div>
               ))
             )}
@@ -417,6 +441,7 @@ export function StudioShell() {
           else void run();
         }}
       >
+        <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
         {online && status?.mistral ? (
           <div className="mb-2">
             <label
@@ -485,20 +510,23 @@ export function StudioShell() {
             </>
           )}
         </Button>
+        </div>
       </form>
     </>
   );
 
   const sourcePanel = (
-    <>
-      <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border pl-3 pr-1">
-        <p className="min-w-0 truncate text-xs uppercase tracking-widest text-subtle">Source</p>
-        <ExportActions html={sourceText} title={title} />
-      </div>
-      <pre className="min-h-0 flex-1 overflow-auto p-4 font-mono text-xs leading-relaxed text-muted">
-        {code || "Source appears after a generate."}
-      </pre>
-    </>
+    <StudioFilesPanel
+      files={studioFiles}
+      activeFile={activeFile}
+      onSelectFile={setActiveFile}
+      header={
+        <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border pl-3 pr-1">
+          <p className="min-w-0 truncate text-xs uppercase tracking-widest text-subtle">Code</p>
+          <ExportActions html={sourceText} title={title} />
+        </div>
+      }
+    />
   );
 
   const configStarter = configStarterId ? getStarterById(configStarterId) : undefined;
@@ -543,9 +571,7 @@ export function StudioShell() {
           ) : null}
         </div>
       ) : running ? (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6">
-          <ThinkingStatus brief={`${title} ${brief}`} variant="stage" mode="create" />
-        </div>
+        <PreviewPulseSkeleton />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
           <p className="text-sm text-muted">

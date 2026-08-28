@@ -128,4 +128,18 @@
       opacity: 0;
     }
   }
+
+  .preview-pulse {
+    animation: preview-pulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes preview-pulse {
+    0%,
+    100% {
+      opacity: 0.45;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
 }
