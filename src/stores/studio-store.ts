@@ -30,6 +30,12 @@ type StudioState = {
   }) => void;
   setError: (error: string | null) => void;
   hydratePreview: (opts: { title: string; code: string; html: string }) => void;
+  restorePreview: (opts: {
+    title: string;
+    code: string;
+    html: string;
+    brief?: string;
+  }) => void;
   reset: () => void;
   pushAssistant: (text: string) => void;
 };
@@ -54,6 +60,15 @@ export const useStudioStore = create<StudioState>()(
       setError: (error) => set({ error }),
       hydratePreview: ({ title, code, html }) =>
         set((s) => (s.html ? s : { title, code, html })),
+      restorePreview: ({ title, code, html, brief = "" }) =>
+        set({
+          title,
+          code,
+          html,
+          brief,
+          running: false,
+          error: null,
+        }),
       reset: () => set(empty),
       pushUser: (text) =>
         set((s) => ({

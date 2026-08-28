@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ExportActions } from "@/components/studio/ExportActions";
 import { LivePreview } from "@/components/studio/LivePreview";
 import { StudioDesktopSplit } from "@/components/studio/StudioDesktopSplit";
+import { StudioNavRail } from "@/components/studio/StudioNavRail";
 import { ThinkingStatus } from "@/components/studio/ThinkingStatus";
 import { cn } from "@/lib/utils";
 import {
@@ -18,7 +19,14 @@ import {
   type MistralModelId,
 } from "@/lib/ai/generate";
 import { localPreviewHtml } from "@/lib/preview/local-templates";
-import { STARTERS } from "@/lib/preview/starters";
+import type { Starter } from "@/lib/preview/starters";
+import {
+  addRecent,
+  loadRecents,
+  loadStarredIds,
+  toggleStarred,
+  type StudioRecent,
+} from "@/lib/studio/recents";
 import {
   clearOfflinePreview,
   persistOfflinePreview,
@@ -26,6 +34,8 @@ import {
 } from "@/lib/pwa/offline";
 import { useOnline } from "@/lib/pwa/use-online";
 import { useStudioStore } from "@/stores/studio-store";
+
+const LAST_STARTER_KEY = "cozy-studio-last-starter";
 
 type MobilePanel = "chat" | "code" | "preview";
 
@@ -55,6 +65,7 @@ export function StudioShell() {
   const setError = useStudioStore((s) => s.setError);
   const resetStore = useStudioStore((s) => s.reset);
   const hydratePreview = useStudioStore((s) => s.hydratePreview);
+  const restorePreview = useStudioStore((s) => s.restorePreview);
   const error = useStudioStore((s) => s.error);
   const messages = useStudioStore((s) => s.messages);
   const html = useStudioStore((s) => s.html);
@@ -65,6 +76,17 @@ export function StudioShell() {
   const [showSource, setShowSource] = useState(false);
   const [status, setStatus] = useState<AiStatus | null>(null);
   const [selectedModel, setSelectedModel] = useState<MistralModelId>(DEFAULT_CREATE_MODEL);
+  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [lastStarterId, setLastStarterId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(LAST_STARTER_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const [recents, setRecents] = useState<StudioRecent[]>(() => loadRecents());
+  const [starredIds, setStarredIds] = useState<Set<string>>(() => loadStarredIds());
   const online = useOnline();
   const thinkRef = useRef<HTMLDivElement>(null);
   const runId = useRef(0);
@@ -114,7 +136,49 @@ export function StudioShell() {
     resetStore();
     setShowSource(false);
     setPanel("chat");
+    setMobileNavOpen(false);
     void clearOfflinePreview();
+  }
+
+  function recordGeneration(opts: {
+    title: string;
+    code: string;
+    html: string;
+    brief: string;
+  }) {
+    setRecents(addRecent(opts));
+  }
+
+  function pickStarter(starter: Starter) {
+    setLastStarterId(starter.id);
+    try {
+      localStorage.setItem(LAST_STARTER_KEY, starter.id);
+    } catch {
+      /* private mode */
+    }
+    setMobileNavOpen(false);
+    void run(starter.prompt, { fresh: true });
+  }
+
+  function openRecent(recent: StudioRecent) {
+    setMobileNavOpen(false);
+    if (recent.html) {
+      restorePreview({
+        title: recent.title,
+        code: recent.code,
+        html: recent.html,
+        brief: recent.brief,
+      });
+      setPanel("preview");
+      return;
+    }
+    if (recent.brief.trim()) {
+      void run(recent.brief, { fresh: true });
+    }
+  }
+
+  function toggleStar(id: string) {
+    setStarredIds(toggleStarred(id));
   }
 
   async function run(promptOverride?: string, opts?: { fresh?: boolean }) {
@@ -143,6 +207,12 @@ export function StudioShell() {
         assistantText: "Offline. Local layout saved on this device.",
         provider: "local",
       });
+      recordGeneration({
+        title: local.title,
+        code: local.code,
+        html: local.html,
+        brief: prompt,
+      });
       setBrief("");
       setPanel("preview");
       return;
@@ -168,6 +238,14 @@ export function StudioShell() {
               : "Preview generated with Grok.",
           provider: remote.provider,
         });
+        if (!revising) {
+          recordGeneration({
+            title: remote.title,
+            code: remote.code,
+            html: remote.html,
+            brief: prompt,
+          });
+        }
         setBrief("");
         setPanel("preview");
         return;
@@ -184,6 +262,12 @@ export function StudioShell() {
         ...local,
         assistantText: `${remote.error}. Local layout applied.`,
         provider: "local",
+      });
+      recordGeneration({
+        title: local.title,
+        code: local.code,
+        html: local.html,
+        brief: prompt,
       });
       setBrief("");
       setPanel("preview");
@@ -203,6 +287,12 @@ export function StudioShell() {
         assistantText: "Generator unavailable. Local layout applied.",
         provider: "local",
       });
+      recordGeneration({
+        title: local.title,
+        code: local.code,
+        html: local.html,
+        brief: prompt,
+      });
       setError(message);
       setBrief("");
       setPanel("preview");
@@ -211,62 +301,66 @@ export function StudioShell() {
 
   const sourceText = code || html;
 
+  const navRailProps = {
+    collapsed: railCollapsed,
+    onCollapsedChange: setRailCollapsed,
+    mobileOpen: mobileNavOpen,
+    onMobileOpenChange: setMobileNavOpen,
+    lastStarterId,
+    recents,
+    starredIds,
+    running,
+    onNew: reset,
+    onStarter: pickStarter,
+    onRecent: openRecent,
+    onToggleStar: toggleStar,
+  };
+
   const chatPanel = (
     <>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
-        {messages.length === 0 && !running ? (
-          <div className="space-y-3">
-            <p className="text-sm leading-relaxed text-muted">
-              Describe a kanban, chat, habits grid, calendar, or notes tool.
-              Generation runs on the server.
-            </p>
-            {!online ? (
-              <p className="text-xs leading-relaxed text-subtle">
-                Offline. Last preview stays on this device. Generate still
-                builds a local layout.
-              </p>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col lg:flex-row">
+        <StudioNavRail {...navRailProps} />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+            {messages.length === 0 && !running ? (
+              <div className="space-y-3">
+                <p className="text-sm leading-relaxed text-muted">
+                  Describe a kanban, chat, habits grid, calendar, or notes tool.
+                  Generation runs on the server.
+                </p>
+                {!online ? (
+                  <p className="text-xs leading-relaxed text-subtle">
+                    Offline. Last preview stays on this device. Generate still
+                    builds a local layout.
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              messages.map((m) => (
+                <div
+                  key={m.id}
+                  className={cn(
+                    "break-words rounded-xl px-3 py-2 text-sm leading-relaxed",
+                    m.role === "user"
+                      ? "ml-6 bg-accent text-accent-fg"
+                      : "mr-6 border border-border bg-card text-fg",
+                  )}
+                >
+                  {m.text}
+                </div>
+              ))
+            )}
+            {running ? (
+              <div ref={thinkRef}>
+                <ThinkingStatus
+                  brief={`${title} ${brief}`}
+                  mode={html ? "revise" : "create"}
+                />
+              </div>
             ) : null}
+            {error ? <p className="text-xs text-muted">{error}</p> : null}
           </div>
-        ) : (
-          messages.map((m) => (
-            <div
-              key={m.id}
-              className={cn(
-                "break-words rounded-xl px-3 py-2 text-sm leading-relaxed",
-                m.role === "user"
-                  ? "ml-6 bg-accent text-accent-fg"
-                  : "mr-6 border border-border bg-card text-fg",
-              )}
-            >
-              {m.text}
-            </div>
-          ))
-        )}
-        {running ? (
-          <div ref={thinkRef}>
-            <ThinkingStatus
-              brief={`${title} ${brief}`}
-              mode={html ? "revise" : "create"}
-            />
-          </div>
-        ) : null}
-        {!running ? (
-          <div className="flex flex-wrap gap-2">
-            {STARTERS.map((s) => (
-              <Button
-                key={s.id}
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={running}
-                onClick={() => void run(s.prompt, { fresh: true })}
-              >
-                {s.label}
-              </Button>
-            ))}
-          </div>
-        ) : null}
-        {error ? <p className="text-xs text-muted">{error}</p> : null}
+        </div>
       </div>
       <form
         className="shrink-0 border-t border-border p-3"
