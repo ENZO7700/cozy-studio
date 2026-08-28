@@ -1,0 +1,9 @@
+node_modules/
+.vercel/
+dist/
+.env
+.env.*
+.project_id
+.github_repo
+.tanstack/
+*.local
