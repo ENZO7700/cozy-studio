@@ -546,7 +546,7 @@ export function StudioShell() {
           </p>
           <ol className="max-w-xs space-y-1.5 text-left text-xs leading-relaxed text-subtle">
             <li>1. Choose a starter and add-ons</li>
-            <li>2. Click Vytvoriť on the canvas</li>
+            <li>2. Click Generate on the canvas</li>
             <li>3. Revise without blanking the canvas</li>
           </ol>
         </div>

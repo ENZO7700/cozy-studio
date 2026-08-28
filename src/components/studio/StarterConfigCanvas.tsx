@@ -72,7 +72,7 @@ export function StarterConfigCanvas({
 
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
           <Button type="button" disabled={running} onClick={onGenerate}>
-            {online ? "Vytvoriť" : "Generate locally"}
+            {online ? "Generate" : "Generate locally"}
             <Send className="size-4" />
           </Button>
           <Button
