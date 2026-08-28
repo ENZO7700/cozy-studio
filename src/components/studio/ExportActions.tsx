@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Copy, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { standaloneHtml } from "@/lib/preview/cozy-elements";
 import { copyText, downloadHtml, slugFromTitle } from "@/lib/studio/export";
 
 export function ExportActions({
@@ -15,7 +16,7 @@ export function ExportActions({
 
   async function onCopy() {
     if (disabled) return;
-    const ok = await copyText(html);
+    const ok = await copyText(standaloneHtml(html));
     if (!ok) return;
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1400);
@@ -40,7 +41,7 @@ export function ExportActions({
         size="sm"
         disabled={disabled}
         aria-label="Download HTML"
-        onClick={() => downloadHtml(slugFromTitle(title), html)}
+        onClick={() => downloadHtml(slugFromTitle(title), standaloneHtml(html))}
       >
         <Download className="size-3.5" />
         .html
