@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { injectCozyElements } from "@/lib/preview/cozy-elements";
+import { standaloneHtml } from "@/lib/preview/cozy-elements";
 import { applyPreviewHtml } from "@/lib/preview/dom-patch";
 
 export function LivePreview({ html, title }: { html: string; title: string }) {
@@ -13,7 +13,7 @@ export function LivePreview({ html, title }: { html: string; title: string }) {
 
     const prev = applied.current;
     applied.current = html;
-    const next = injectCozyElements(html);
+    const next = standaloneHtml(html);
 
     if (!prev) {
       iframe.dataset.patch = "reloaded";

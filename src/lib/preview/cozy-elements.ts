@@ -139,6 +139,32 @@ export function injectCozyElements(html: string): string {
   return `${html}\n${tag}`;
 }
 
+/** Standalone document for iframe preview and file:// export — doctype, charset, cozy runtime. */
+export function standaloneHtml(html: string): string {
+  const trimmed = html.trim();
+  if (!trimmed) return trimmed;
+
+  let doc = trimmed;
+  if (!/<!DOCTYPE\s+html/i.test(doc)) {
+    doc = `<!DOCTYPE html>\n${doc}`;
+  }
+
+  if (!/<meta[^>]+charset\s*=/i.test(doc)) {
+    const meta = '<meta charset="UTF-8"/>';
+    if (/<head[\s>]/i.test(doc)) {
+      doc = doc.replace(/<head(\s[^>]*)?>/i, (m) => `${m}\n${meta}`);
+    } else if (/<html[\s>]/i.test(doc)) {
+      doc = doc.replace(/<html(\s[^>]*)?>/i, (m) => `${m}\n<head>${meta}</head>`);
+    } else if (/<body[\s>]/i.test(doc)) {
+      doc = `<!DOCTYPE html><html lang="en"><head>${meta}<meta name="viewport" content="width=device-width, initial-scale=1"/></head>${doc}</html>`;
+    } else {
+      doc = `<!DOCTYPE html><html lang="en"><head>${meta}</head><body>${doc}</body></html>`;
+    }
+  }
+
+  return injectCozyElements(doc);
+}
+
 export function ensureCozyElements(doc: Document) {
   const win = doc.defaultView;
   if (!win || win.customElements.get("cozy-app")) {
