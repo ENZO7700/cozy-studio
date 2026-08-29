@@ -523,18 +523,7 @@ export function StudioShell() {
           onGenerate={generateFromConfig}
         />
       ) : html ? (
-        <div className="relative min-h-0 flex-1">
-          <LivePreview html={html} title={title} />
-          {running ? (
-            <div className="pointer-events-none absolute bottom-4 left-4">
-              <ThinkingStatus
-                brief={`${title} ${brief}`}
-                variant="chip"
-                mode={html ? "revise" : "create"}
-              />
-            </div>
-          ) : null}
-        </div>
+        <LivePreview html={html} title={title} />
       ) : running ? (
         <PreviewPulseSkeleton />
       ) : (
