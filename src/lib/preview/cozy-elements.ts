@@ -12,7 +12,7 @@ export const COZY_ELEMENTS_SOURCE = `(() => {
       const r = this.attachShadow({ mode: "open" });
       r.innerHTML = sheet(\`:host{display:block;min-height:100%;background:#f4efe6;color:#1c1915;font-family:Palatino,Georgia,serif}
 .wrap{max-width:1080px;margin:0 auto;padding:20px 16px 40px}
-.kicker{letter-spacing:.16em;text-transform:uppercase;font-size:11px;color:#8a7f70;margin:0 0 8px;font-family:system-ui,sans-serif}
+.kicker{display:block;position:static;writing-mode:horizontal-tb;text-orientation:mixed;white-space:normal;max-width:100%;letter-spacing:.16em;text-transform:uppercase;font-size:11px;color:#8a7f70;margin:0 0 8px;font-family:system-ui,sans-serif;background:transparent;border-radius:0;padding:0}
 h1{font-size:clamp(1.6rem,4vw,2.4rem);line-height:1.12;margin:0 0 8px;font-weight:600}
 .lede{font-family:system-ui,sans-serif;color:#4a433a;font-size:15px;line-height:1.5;margin:0 0 22px}\`) +
         '<div class="wrap"><p class="kicker"></p><h1></h1><p class="lede"></p><slot></slot></div>';
@@ -22,7 +22,21 @@ h1{font-size:clamp(1.6rem,4vw,2.4rem);line-height:1.12;margin:0 0 8px;font-weigh
     attributeChangedCallback() { this._sync(); }
     _sync() {
       const r = this.shadowRoot;
-      const k = this.getAttribute("kicker") || "";
+      const rawK = this.getAttribute("kicker") || "";
+      const k = (() => {
+        const t = rawK.trim();
+        if (!t) return "";
+        const max = 24;
+        if (t.length <= max) return t;
+        const lower = t.toLowerCase();
+        if (/kanban|board|trello/.test(lower)) return "Kanban";
+        if (/chat|asistent|konverz/.test(lower)) return "Chat";
+        if (/habit|návyk|navyk|streak/.test(lower)) return "Habits";
+        if (/calendar|kalend/.test(lower)) return "Calendar";
+        if (/note|poznám|poznam|editor/.test(lower)) return "Notes";
+        if (/café|cafe|kaviareň|kaviaren|restaurant|landing/.test(lower)) return "Café";
+        return t.slice(0, max);
+      })();
       const h = this.getAttribute("heading") || "";
       const l = this.getAttribute("lede") || "";
       r.querySelector(".kicker").textContent = k;
@@ -127,16 +141,31 @@ h2{margin:0 0 10px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;c
 })();`;
 
 const SCRIPT_RE = /<script\s+data-cozy-elements\b[^>]*>[\s\S]*?<\/script>/i;
+/** Generated pages sometimes redefine cozy-* before our runtime — strip those scripts. */
+const ROGUE_COZY_SCRIPT_RE =
+  /<script\b(?![^>]*\bdata-cozy-elements\b)[^>]*>[\s\S]*?customElements\.define\s*\(\s*["']cozy-/gi;
+
+export function stripRogueCozyScripts(html: string): string {
+  return html.replace(ROGUE_COZY_SCRIPT_RE, "");
+}
 
 export function cozyElementsScriptTag(): string {
   return `<script ${COZY_SCRIPT_ATTR}>\n${COZY_ELEMENTS_SOURCE}\n</script>`;
 }
 
 export function injectCozyElements(html: string): string {
+  let doc = stripRogueCozyScripts(html);
   const tag = cozyElementsScriptTag();
-  if (SCRIPT_RE.test(html)) return html.replace(SCRIPT_RE, tag);
-  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${tag}</body>`);
-  return `${html}\n${tag}`;
+  if (SCRIPT_RE.test(doc)) {
+    doc = doc.replace(SCRIPT_RE, tag);
+  } else if (/<head[\s>]/i.test(doc)) {
+    doc = doc.replace(/<head(\s[^>]*)?>/i, (m) => `${m}\n${tag}`);
+  } else if (/<\/body>/i.test(doc)) {
+    doc = doc.replace(/<\/body>/i, `${tag}</body>`);
+  } else {
+    doc = `${doc}\n${tag}`;
+  }
+  return doc;
 }
 
 /** Standalone document for iframe preview and file:// export — doctype, charset, cozy runtime. */
