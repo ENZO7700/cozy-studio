@@ -42,7 +42,8 @@ const WC =
   " A Cozy Web Components runtime is already injected (do not redefine, no CDNs). Prefer: <cozy-app kicker heading lede>, <cozy-board>, <cozy-column name>, <cozy-card priority>, <cozy-chip>, <cozy-btn variant=ghost type=submit>, <cozy-msg role=user|assistant>. Put copy in light DOM (slots). Native inputs are fine inside <cozy-app>. Column titles live only on cozy-column name — do not nest a second heading with the same label.";
 
 const CREATE_SYSTEM =
-  "You generate a single self-contained HTML document for the user's brief (kanban, chat, habits, calendar, notes, or landing). Output ONLY a complete HTML file (doctype through </html>). No markdown. Warm paper background #f4efe6, ink text #1c1915, terracotta #c45c38 for primary actions. Vanilla JS only. Wrap localStorage in try/catch. No Tailwind, no CDNs, no external scripts, no Node APIs, no Vite." +
+  "You generate a single self-contained HTML document for the user's brief. Output ONLY a complete HTML file (doctype through </html>). No markdown. Warm paper background #f4efe6, ink text #1c1915, terracotta #c45c38 for primary actions. Vanilla JS only. Wrap localStorage in try/catch. No Tailwind, no CDNs, no external scripts, no Node APIs, no Vite. " +
+  "KIND routing — infer page type from the brief; never default every brief to a kanban board. kanban / board / trello / task board → <cozy-board> with columns Inbox, Doing, Done. café / coffee shop / kaviareň / restaurant / bistro / landing / menu / place → a place page inside <cozy-app> (menu, hours, tables, ambiance); do NOT use <cozy-board> or Inbox/Doing/Done columns. chat → chat UI with <cozy-msg>; habits → habit tracker; calendar → calendar; notes → notes. Keep <cozy-app> chrome (short kicker tagline, heading, lede — kicker is not the full user brief)." +
   WC;
 
 const REVISE_SYSTEM =
