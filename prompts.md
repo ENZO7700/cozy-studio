@@ -22,6 +22,10 @@ Month calendar with click-to-add events and a side list of today's notes. Quiet 
 
 Notes tool: searchable list on the left, editor on the right, new-note action. Persist notes in the page. Warm paper, ink text, terracotta accent.
 
+## 6. Café (place, not board)
+
+A neighborhood café landing page: menu highlights, opening hours, address, and a warm terracotta reservation button. Paper background, editorial type — **not** a kanban with Inbox/Doing/Done.
+
 ## +1 Base44 diagnostic
 
 Do not invent a new product. Inspect the running Studio and report only:
@@ -29,7 +33,7 @@ Do not invent a new product. Inspect the running Studio and report only:
 1. Does `/studio` render (not a blank gray page)?
 2. Is the browser console free of `createRequire is not a function`?
 3. Does Generate run through a server function (no `vite` / `rolldown` / `pg` in the client bundle)?
-4. If the model is unavailable, does a local layout still fill the preview iframe?
+4. If the model is unavailable **while online**, does the preview stay **empty** (no silent local template)?
 5. Mobile (~390px): three tabs Brief / Code / Preview, no horizontal overflow.
 
-Expected: `/studio` paints immediately, generate is user-initiated, preview is `srcDoc` HTML, client bundle `createRequire` count is 0.
+Expected: `/studio` paints immediately, generate is user-initiated, preview is `srcDoc` HTML, client bundle `createRequire` count is 0, online API failure does not backfill a local layout.
