@@ -543,38 +543,36 @@ export function StudioShell() {
 
   const configStarter = configStarterId ? getStarterById(configStarterId) : undefined;
 
-  const previewPanel = (
+  const previewPanel = accountOpen ? (
+    <AccountView
+      profile={profile}
+      onProfileChange={(patch: Partial<StudioProfile>) =>
+        setProfile(saveProfile(patch))
+      }
+      recents={recents}
+      starredIds={starredIds}
+      running={running}
+      previewHtml={html}
+      previewTitle={title}
+      onRecent={openRecent}
+      onDiscoverRecents={closeAccountToRecents}
+    />
+  ) : (
     <>
       <div className="flex h-12 shrink-0 items-center border-b border-border pl-3 pr-1">
         <p className="min-w-0 truncate text-xs uppercase tracking-widest text-subtle">
-          {accountOpen
-            ? "Account"
-            : running
-              ? html
-                ? "Upravujem"
-                : "Premýšľanie"
-              : configStarter
-                ? "Configure"
-                : online
-                  ? "Live preview"
-                  : "Saved preview"}
+          {running
+            ? html
+              ? "Upravujem"
+              : "Premýšľanie"
+            : configStarter
+              ? "Configure"
+              : online
+                ? "Live preview"
+                : "Saved preview"}
         </p>
       </div>
-      {accountOpen ? (
-        <AccountView
-          profile={profile}
-          onProfileChange={(patch: Partial<StudioProfile>) =>
-            setProfile(saveProfile(patch))
-          }
-          recents={recents}
-          starredIds={starredIds}
-          running={running}
-          previewHtml={html}
-          previewTitle={title}
-          onRecent={openRecent}
-          onDiscoverRecents={closeAccountToRecents}
-        />
-      ) : configStarter && !running ? (
+      {configStarter && !running ? (
         <StarterConfigCanvas
           starter={configStarter}
           selectedAddonIds={selectedAddonIds}
@@ -692,7 +690,8 @@ export function StudioShell() {
 
           <section
             className={cn(
-              "flex min-h-0 min-w-0 flex-col bg-canvas",
+              "flex min-h-0 min-w-0 flex-col",
+              accountOpen ? "bg-white" : "bg-canvas",
               panel === "preview" ? "min-h-0 flex-1" : "hidden",
             )}
           >
