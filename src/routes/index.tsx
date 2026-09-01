@@ -15,6 +15,20 @@ function Home() {
         >
           Cozy
         </Link>
+        <nav className="flex items-center gap-4 text-sm">
+          <Link
+            to="/studio"
+            className="text-muted transition-colors hover:text-fg"
+          >
+            Studio
+          </Link>
+          <Link
+            to="/account"
+            className="text-muted transition-colors hover:text-fg"
+          >
+            Account
+          </Link>
+        </nav>
         <Link to="/studio" className={buttonVariants({ size: "sm" })}>
           Open Studio
         </Link>

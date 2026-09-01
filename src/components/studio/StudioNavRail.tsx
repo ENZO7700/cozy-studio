@@ -13,7 +13,9 @@ import {
   TableProperties,
   X,
 } from "lucide-react";
+import { AccountRailControl } from "@/components/studio/account/AccountRailControl";
 import { cn } from "@/lib/utils";
+import type { StudioProfile } from "@/lib/studio/profile";
 import type { StudioRecent } from "@/lib/studio/recents";
 import { STARTERS, type Starter } from "@/lib/preview/starters";
 
@@ -37,6 +39,8 @@ type StudioNavRailProps = {
   onStarter: (starter: Starter) => void;
   onRecent: (recent: StudioRecent) => void;
   onToggleStar: (id: string) => void;
+  profile: StudioProfile;
+  onProfileChange: (patch: Partial<StudioProfile>) => void;
 };
 
 function NavMark({ compact }: { compact?: boolean }) {
@@ -99,6 +103,8 @@ function RailBody({
   recents,
   starredIds,
   running,
+  profile,
+  onProfileChange,
   onStarter,
   onRecent,
   onToggleStar,
@@ -109,6 +115,8 @@ function RailBody({
   recents: StudioRecent[];
   starredIds: Set<string>;
   running: boolean;
+  profile: StudioProfile;
+  onProfileChange: (patch: Partial<StudioProfile>) => void;
   onStarter: (starter: Starter) => void;
   onRecent: (recent: StudioRecent) => void;
   onToggleStar: (id: string) => void;
@@ -227,6 +235,19 @@ function RailBody({
             ))}
           </ul>
         )}
+      </div>
+
+      <div className="shrink-0 border-t border-border pt-2">
+        {!collapsed ? (
+          <p className="mb-1.5 px-2 text-[10px] font-medium uppercase tracking-widest text-subtle">
+            Account
+          </p>
+        ) : null}
+        <AccountRailControl
+          profile={profile}
+          collapsed={collapsed}
+          onProfileChange={onProfileChange}
+        />
       </div>
     </div>
   );
