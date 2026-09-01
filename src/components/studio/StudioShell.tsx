@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Code2, Eye, MessageSquare, MoreHorizontal, PenLine, Send, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ExportActions } from "@/components/studio/ExportActions";
@@ -10,7 +10,6 @@ import { PreviewPulseSkeleton } from "@/components/studio/PreviewPulseSkeleton";
 import { StarterConfigCanvas } from "@/components/studio/StarterConfigCanvas";
 import { StudioDesktopSplit } from "@/components/studio/StudioDesktopSplit";
 import { StudioNavRail } from "@/components/studio/StudioNavRail";
-import { AccountView } from "@/components/studio/AccountView";
 import { ThinkingStatus } from "@/components/studio/ThinkingStatus";
 import { cn } from "@/lib/utils";
 import {
@@ -71,7 +70,7 @@ function sleep(ms: number) {
   });
 }
 
-export function StudioShell() {
+export function StudioShell({ openRecentId }: { openRecentId?: string }) {
   const brief = useStudioStore((s) => s.brief);
   const setBrief = useStudioStore((s) => s.setBrief);
   const running = useStudioStore((s) => s.running);
@@ -105,16 +104,23 @@ export function StudioShell() {
   const [recents, setRecents] = useState<StudioRecent[]>(() => loadRecents());
   const [starredIds, setStarredIds] = useState<Set<string>>(() => loadStarredIds());
   const [profile, setProfile] = useState<StudioProfile>(() => loadProfile());
-  const [accountOpen, setAccountOpen] = useState(false);
   const [configStarterId, setConfigStarterId] = useState<string | null>(null);
   const [selectedAddonIds, setSelectedAddonIds] = useState<Set<string>>(() => new Set());
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const online = useOnline();
+  const navigate = useNavigate();
   const thinkRef = useRef<HTMLDivElement>(null);
   const runId = useRef(0);
+  const handledRecentRef = useRef<string | null>(null);
 
   useEffect(() => {
     void getAiStatus().then(setStatus);
+  }, []);
+
+  useEffect(() => {
+    const refreshProfile = () => setProfile(loadProfile());
+    window.addEventListener("focus", refreshProfile);
+    return () => window.removeEventListener("focus", refreshProfile);
   }, []);
 
   useEffect(() => {
@@ -174,7 +180,6 @@ export function StudioShell() {
     setShowSource(false);
     setPanel("chat");
     setMobileNavOpen(false);
-    setAccountOpen(false);
     setConfigStarterId(null);
     setSelectedAddonIds(new Set());
     setActiveFile(null);
@@ -188,7 +193,6 @@ export function StudioShell() {
   }
 
   function pickStarter(starter: Starter) {
-    setAccountOpen(false);
     setLastStarterId(starter.id);
     try {
       localStorage.setItem(LAST_STARTER_KEY, starter.id);
@@ -244,7 +248,6 @@ export function StudioShell() {
   }
 
   function openRecent(recent: StudioRecent) {
-    setAccountOpen(false);
     setMobileNavOpen(false);
     setConfigStarterId(null);
     setSelectedAddonIds(new Set());
@@ -267,6 +270,14 @@ export function StudioShell() {
   function toggleStar(id: string) {
     setStarredIds(toggleStarred(id));
   }
+
+  useEffect(() => {
+    if (!openRecentId || handledRecentRef.current === openRecentId) return;
+    handledRecentRef.current = openRecentId;
+    const recent = loadRecents().find((r) => r.id === openRecentId);
+    if (recent) openRecent(recent);
+    void navigate({ to: "/studio", search: {}, replace: true });
+  }, [openRecentId, navigate]);
 
   async function run(promptOverride?: string, opts?: { fresh?: boolean }) {
     const prompt = (promptOverride ?? brief).trim();
@@ -307,7 +318,6 @@ export function StudioShell() {
         });
       }
       setBrief("");
-      setAccountOpen(false);
       setPanel("preview");
       return;
     }
@@ -345,7 +355,6 @@ export function StudioShell() {
           recordReviseActivity();
         }
         setBrief("");
-        setAccountOpen(false);
         setPanel("preview");
         return;
       }
@@ -371,24 +380,6 @@ export function StudioShell() {
 
   const studioFiles = listStudioFiles(html, code);
 
-  function openAccount() {
-    setAccountOpen((open) => {
-      const next = !open;
-      if (next) {
-        setMobileNavOpen(false);
-        setConfigStarterId(null);
-        setPanel("preview");
-      }
-      return next;
-    });
-  }
-
-  function closeAccountToRecents() {
-    setAccountOpen(false);
-    setMobileNavOpen(true);
-    setPanel("chat");
-  }
-
   const navRailProps = {
     collapsed: railCollapsed,
     onCollapsedChange: setRailCollapsed,
@@ -402,8 +393,8 @@ export function StudioShell() {
     onRecent: openRecent,
     onToggleStar: toggleStar,
     profile,
-    accountActive: accountOpen,
-    onAccountOpen: openAccount,
+    onProfileChange: (patch: Partial<StudioProfile>) =>
+      setProfile(saveProfile(patch)),
   };
 
   const chatPanel = (
@@ -543,21 +534,7 @@ export function StudioShell() {
 
   const configStarter = configStarterId ? getStarterById(configStarterId) : undefined;
 
-  const previewPanel = accountOpen ? (
-    <AccountView
-      profile={profile}
-      onProfileChange={(patch: Partial<StudioProfile>) =>
-        setProfile(saveProfile(patch))
-      }
-      recents={recents}
-      starredIds={starredIds}
-      running={running}
-      previewHtml={html}
-      previewTitle={title}
-      onRecent={openRecent}
-      onDiscoverRecents={closeAccountToRecents}
-    />
-  ) : (
+  const previewPanel = (
     <>
       <div className="flex h-12 shrink-0 items-center border-b border-border pl-3 pr-1">
         <p className="min-w-0 truncate text-xs uppercase tracking-widest text-subtle">
@@ -690,8 +667,7 @@ export function StudioShell() {
 
           <section
             className={cn(
-              "flex min-h-0 min-w-0 flex-col",
-              accountOpen ? "bg-white" : "bg-canvas",
+              "flex min-h-0 min-w-0 flex-col bg-canvas",
               panel === "preview" ? "min-h-0 flex-1" : "hidden",
             )}
           >
