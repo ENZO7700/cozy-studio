@@ -35,6 +35,12 @@ import {
   toggleStarred,
   type StudioRecent,
 } from "@/lib/studio/recents";
+import {
+  loadProfile,
+  saveProfile,
+  touchProfileActivity,
+  type StudioProfile,
+} from "@/lib/studio/profile";
 import { fileRefs, listStudioFiles } from "@/lib/studio/files";
 import { shouldApplyLocalPreviewOnFailure } from "@/lib/studio/run-failure";
 import {
@@ -97,6 +103,7 @@ export function StudioShell() {
   });
   const [recents, setRecents] = useState<StudioRecent[]>(() => loadRecents());
   const [starredIds, setStarredIds] = useState<Set<string>>(() => loadStarredIds());
+  const [profile, setProfile] = useState<StudioProfile>(() => loadProfile());
   const [configStarterId, setConfigStarterId] = useState<string | null>(null);
   const [selectedAddonIds, setSelectedAddonIds] = useState<Set<string>>(() => new Set());
   const [activeFile, setActiveFile] = useState<string | null>(null);
@@ -225,6 +232,11 @@ export function StudioShell() {
     brief: string;
   }) {
     setRecents(addRecent(opts));
+    setProfile(touchProfileActivity({ generated: true }));
+  }
+
+  function recordReviseActivity() {
+    setProfile(touchProfileActivity());
   }
 
   function openRecent(recent: StudioRecent) {
@@ -279,12 +291,16 @@ export function StudioShell() {
         files: fileRefs(local.html, local.code),
       });
       setActiveFile("index.html");
-      recordGeneration({
-        title: local.title,
-        code: local.code,
-        html: local.html,
-        brief: prompt,
-      });
+      if (revising) {
+        recordReviseActivity();
+      } else {
+        recordGeneration({
+          title: local.title,
+          code: local.code,
+          html: local.html,
+          brief: prompt,
+        });
+      }
       setBrief("");
       setPanel("preview");
       return;
@@ -319,6 +335,8 @@ export function StudioShell() {
             html: remote.html,
             brief: prompt,
           });
+        } else {
+          recordReviseActivity();
         }
         setBrief("");
         setPanel("preview");
@@ -358,6 +376,10 @@ export function StudioShell() {
     onStarter: pickStarter,
     onRecent: openRecent,
     onToggleStar: toggleStar,
+    profile,
+    onProfileChange: (patch: Partial<StudioProfile>) => setProfile(saveProfile(patch)),
+    previewHtml: html,
+    previewTitle: title,
   };
 
   const chatPanel = (

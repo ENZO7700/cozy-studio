@@ -13,7 +13,9 @@ import {
   TableProperties,
   X,
 } from "lucide-react";
+import { AccountRailCard } from "@/components/studio/AccountRailCard";
 import { cn } from "@/lib/utils";
+import type { StudioProfile } from "@/lib/studio/profile";
 import type { StudioRecent } from "@/lib/studio/recents";
 import { STARTERS, type Starter } from "@/lib/preview/starters";
 
@@ -37,6 +39,10 @@ type StudioNavRailProps = {
   onStarter: (starter: Starter) => void;
   onRecent: (recent: StudioRecent) => void;
   onToggleStar: (id: string) => void;
+  profile: StudioProfile;
+  onProfileChange: (patch: Partial<StudioProfile>) => void;
+  previewHtml: string;
+  previewTitle: string;
 };
 
 function NavMark({ compact }: { compact?: boolean }) {
@@ -454,6 +460,17 @@ export function StudioNavRail(props: StudioNavRailProps) {
         {...bodyProps}
         collapsed={collapsed}
         onSearchOpen={() => setSearchOpen(true)}
+      />
+      <AccountRailCard
+        collapsed={collapsed}
+        profile={bodyProps.profile}
+        onProfileChange={bodyProps.onProfileChange}
+        recents={bodyProps.recents}
+        starredIds={bodyProps.starredIds}
+        running={bodyProps.running}
+        onRecent={bodyProps.onRecent}
+        previewHtml={bodyProps.previewHtml}
+        previewTitle={bodyProps.previewTitle}
       />
       <StudioSearchPalette
         open={searchOpen}
