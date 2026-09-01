@@ -34,7 +34,7 @@ export function CozyAvatar({
         alt=""
         className={cn(
           dim,
-          "shrink-0 rounded-full border-[3px] border-surface object-cover",
+          "shrink-0 rounded-full border-4 border-surface object-cover",
           className,
         )}
       />
@@ -44,7 +44,7 @@ export function CozyAvatar({
     <span
       className={cn(
         dim,
-        "flex shrink-0 items-center justify-center rounded-full border-[3px] border-surface bg-card font-serif text-accent",
+        "flex shrink-0 items-center justify-center rounded-full border-4 border-surface bg-card font-serif text-accent",
         text,
         className,
       )}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Download, Pencil, Star } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -14,29 +14,38 @@ import {
   saveProfile,
   type StudioProfile,
 } from "@/lib/studio/profile";
-import { loadRecents, loadStarredIds, type StudioRecent } from "@/lib/studio/recents";
+import {
+  loadRecents,
+  loadStarredIds,
+  toggleStarred,
+  type StudioRecent,
+} from "@/lib/studio/recents";
 import { standaloneHtml } from "@/lib/preview/cozy-elements";
 import { downloadHtml, slugFromTitle } from "@/lib/studio/export";
 import { readOfflinePreview } from "@/lib/pwa/offline";
 
 function AccountHeader({ profile }: { profile: StudioProfile }) {
   return (
-    <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border px-4 sm:px-8">
-      <Link to="/" className="inline-flex h-10 shrink-0 items-center font-serif text-lg tracking-tight">
+    <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-border px-4 sm:gap-3 sm:px-8">
+      <Link
+        to="/"
+        className="inline-flex h-10 shrink-0 items-center font-serif text-lg tracking-tight"
+      >
         Cozy
       </Link>
-      <nav className="flex items-center gap-4 text-sm" aria-label="Hlavná navigácia">
-        <Link
-          to="/studio"
-          className="text-muted transition-colors hover:text-fg"
-        >
+      <nav className="flex items-center gap-3 text-sm sm:gap-4" aria-label="Hlavná navigácia">
+        <Link to="/studio" className="text-muted transition-colors hover:text-fg">
           Studio
         </Link>
-        <span className="font-medium text-fg" aria-current="page">
-          Account
-        </span>
+        <Link
+          to="/account"
+          className="font-medium text-fg"
+          aria-current="page"
+        >
+          Účet
+        </Link>
       </nav>
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 max-w-[40%] items-center justify-end gap-2 sm:max-w-none">
         <span className="hidden truncate text-sm text-muted sm:inline">
           {profile.displayName}
         </span>
@@ -49,32 +58,55 @@ function AccountHeader({ profile }: { profile: StudioProfile }) {
 function PinnedCard({
   recent,
   profile,
+  starred,
   onOpen,
+  onToggleStar,
 }: {
   recent: StudioRecent;
   profile: StudioProfile;
+  starred: boolean;
   onOpen: () => void;
+  onToggleStar: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="overflow-hidden rounded-xl border border-border bg-card text-left transition-colors hover:border-accent/40"
-    >
+    <article className="overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-accent/40">
       <div className="relative aspect-[16/10] overflow-hidden bg-canvas">
-        <PinnedPreview html={recent.html} />
-        <span className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full border border-border bg-surface/90">
-          <Star className="size-3.5 text-accent" fill="currentColor" aria-hidden />
-        </span>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="block size-full text-left"
+          aria-label={`Otvoriť ${recent.title}`}
+        >
+          <PinnedPreview html={recent.html} />
+        </button>
+        <button
+          type="button"
+          aria-label={starred ? "Odopnúť" : "Pripnúť"}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleStar();
+          }}
+          className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full border border-border bg-surface/95 shadow-sm transition-colors hover:border-accent/50"
+        >
+          <Star
+            className={cn("size-4", starred ? "text-accent" : "text-subtle")}
+            fill={starred ? "currentColor" : "none"}
+            aria-hidden
+          />
+        </button>
       </div>
-      <div className="space-y-1.5 p-3">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="w-full space-y-1.5 p-3 text-left"
+      >
         <p className="truncate text-sm font-semibold text-fg">{recent.title}</p>
         <div className="flex items-center gap-1.5 text-xs text-subtle">
           <CozyAvatar profile={profile} size="sm" />
           <span className="truncate">od {profile.displayName}</span>
         </div>
-      </div>
-    </button>
+      </button>
+    </article>
   );
 }
 
@@ -84,7 +116,10 @@ function EmptyPinnedSlot() {
       <div className="flex aspect-[16/10] flex-col items-center justify-center p-6 text-center">
         <Star className="mb-2 size-6 text-subtle" aria-hidden />
         <p className="text-sm text-muted">Pripnite hviezdou v posledných v Studio.</p>
-        <Link to="/studio" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-3")}>
+        <Link
+          to="/studio"
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-3")}
+        >
           Otvoriť Studio
         </Link>
       </div>
@@ -96,7 +131,7 @@ export function AccountPage() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<StudioProfile>(() => loadProfile());
   const [recents, setRecents] = useState<StudioRecent[]>(() => loadRecents());
-  const [starredIds] = useState(() => loadStarredIds());
+  const [starredIds, setStarredIds] = useState(() => loadStarredIds());
   const [editOpen, setEditOpen] = useState(false);
   const [downloadable, setDownloadable] = useState<{ html: string; title: string } | null>(
     null,
@@ -104,20 +139,27 @@ export function AccountPage() {
   const coverInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    setProfile(loadProfile());
-    setRecents(loadRecents());
+  const refreshDownloadable = useCallback(() => {
     void readOfflinePreview().then((saved) => {
-      if (saved?.html) {
+      if (saved?.html?.trim()) {
         setDownloadable({ html: saved.html, title: saved.title });
         return;
       }
       const recent = loadRecents().find((r) => r.html.trim());
       if (recent) {
         setDownloadable({ html: recent.html, title: recent.title });
+      } else {
+        setDownloadable(null);
       }
     });
   }, []);
+
+  useEffect(() => {
+    setProfile(loadProfile());
+    setRecents(loadRecents());
+    setStarredIds(loadStarredIds());
+    refreshDownloadable();
+  }, [refreshDownloadable]);
 
   const pinned = useMemo(
     () => recents.filter((r) => starredIds.has(r.id)),
@@ -128,24 +170,43 @@ export function AccountPage() {
     setProfile(saveProfile(patch));
   }
 
+  function unpinRecent(id: string) {
+    setStarredIds(toggleStarred(id));
+  }
+
   function openRecentInStudio(recent: StudioRecent) {
     void navigate({ to: "/studio", search: { recent: recent.id } });
   }
 
+  const editButton = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="bg-surface/95 backdrop-blur-sm"
+      onClick={() => setEditOpen(true)}
+    >
+      <Pencil className="size-4" aria-hidden />
+      Upraviť profil
+    </Button>
+  );
+
   return (
-    <main className="min-h-dvh bg-bg text-fg">
+    <main className="min-h-dvh overflow-x-hidden bg-bg text-fg">
       <AccountHeader profile={profile} />
 
-      <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-8 sm:py-8">
-        <div className="relative">
-          <button
-            type="button"
-            aria-label="Nastaviť cover"
-            onClick={() => coverInputRef.current?.click()}
-            className="relative block h-40 w-full overflow-hidden sm:h-52"
-          >
-            <WarmCover coverDataUrl={profile.coverDataUrl} />
-          </button>
+      <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-8">
+        <section className="relative">
+          <div className="overflow-hidden rounded-3xl">
+            <button
+              type="button"
+              aria-label="Nastaviť cover"
+              onClick={() => coverInputRef.current?.click()}
+              className="relative block h-40 w-full sm:h-52"
+            >
+              <WarmCover coverDataUrl={profile.coverDataUrl} />
+            </button>
+          </div>
           <input
             ref={coverInputRef}
             type="file"
@@ -157,10 +218,11 @@ export function AccountPage() {
               void fileToDataUrl(file, 1200).then((url) =>
                 updateProfile({ coverDataUrl: url }),
               );
+              e.target.value = "";
             }}
           />
 
-          <div className="absolute -bottom-10 left-4 sm:-bottom-12 sm:left-6">
+          <div className="absolute -bottom-11 left-0 z-10 sm:-bottom-12 sm:left-2">
             <button
               type="button"
               aria-label="Nastaviť avatar"
@@ -180,25 +242,19 @@ export function AccountPage() {
                 void fileToDataUrl(file, 256).then((url) =>
                   updateProfile({ avatarDataUrl: url }),
                 );
+                e.target.value = "";
               }}
             />
           </div>
 
-          <div className="absolute bottom-3 right-3 sm:bottom-4 sm:right-4">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="bg-surface/95 backdrop-blur-sm"
-              onClick={() => setEditOpen(true)}
-            >
-              <Pencil className="size-4" aria-hidden />
-              Upraviť profil
-            </Button>
+          <div className="pointer-events-none absolute inset-x-0 bottom-3 hidden justify-end px-4 sm:flex">
+            <div className="pointer-events-auto">{editButton}</div>
           </div>
-        </div>
+        </section>
 
-        <div className="mt-14 sm:mt-16">
+        <div className="mt-2 flex justify-end sm:hidden">{editButton}</div>
+
+        <section className="mt-12 min-w-0 sm:mt-3 sm:pl-[8.75rem]">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <h1 className="font-serif text-2xl font-semibold tracking-tight sm:text-3xl">
               {profile.displayName}
@@ -207,47 +263,51 @@ export function AccountPage() {
               Séria {profile.generateCount}
             </span>
           </div>
-          <p className="mt-1 text-sm text-subtle">{profile.handle}</p>
+          <p className="mt-1.5 text-sm text-subtle">{profile.handle}</p>
           <p className="mt-1 text-sm text-muted">
             Člen od {formatProfileDate(profile.memberSince)}
             {" · "}
             Naposledy {formatProfileDate(profile.lastActive)}
           </p>
-        </div>
+        </section>
 
-        <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Pripnuté</h2>
-          <Button
-            type="button"
-            size="sm"
-            disabled={!downloadable}
-            onClick={() => {
-              if (!downloadable) return;
-              downloadHtml(
-                slugFromTitle(downloadable.title),
-                standaloneHtml(downloadable.html),
-              );
-            }}
-          >
-            <Download className="size-4" aria-hidden />
-            Stiahnuť .html
-          </Button>
-        </div>
+        <section className="mt-10">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">Pripnuté</h2>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!downloadable}
+              onClick={() => {
+                if (!downloadable) return;
+                downloadHtml(
+                  slugFromTitle(downloadable.title),
+                  standaloneHtml(downloadable.html),
+                );
+              }}
+            >
+              <Download className="size-4" aria-hidden />
+              Stiahnuť .html
+            </Button>
+          </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {pinned.length === 0 ? (
-            <EmptyPinnedSlot />
-          ) : (
-            pinned.map((r) => (
-              <PinnedCard
-                key={r.id}
-                recent={r}
-                profile={profile}
-                onOpen={() => openRecentInStudio(r)}
-              />
-            ))
-          )}
-        </div>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {pinned.length === 0 ? (
+              <EmptyPinnedSlot />
+            ) : (
+              pinned.map((r) => (
+                <PinnedCard
+                  key={r.id}
+                  recent={r}
+                  profile={profile}
+                  starred={starredIds.has(r.id)}
+                  onOpen={() => openRecentInStudio(r)}
+                  onToggleStar={() => unpinRecent(r.id)}
+                />
+              ))
+            )}
+          </div>
+        </section>
 
         <p className="mt-12 text-center">
           <Link
@@ -263,7 +323,10 @@ export function AccountPage() {
         <EditProfileModal
           profile={profile}
           onClose={() => setEditOpen(false)}
-          onSave={updateProfile}
+          onSave={(patch) => {
+            updateProfile(patch);
+            setEditOpen(false);
+          }}
         />
       ) : null}
     </main>

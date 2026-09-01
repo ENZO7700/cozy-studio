@@ -4,13 +4,13 @@ export function WarmCover({ coverDataUrl }: { coverDataUrl: string | null }) {
       <img
         src={coverDataUrl}
         alt=""
-        className="absolute inset-0 size-full rounded-xl object-cover sm:rounded-3xl"
+        className="absolute inset-0 size-full object-cover"
       />
     );
   }
   return (
     <div
-      className="absolute inset-0 rounded-xl sm:rounded-3xl"
+      className="absolute inset-0"
       style={{
         background:
           "linear-gradient(135deg, #3d342c 0%, #2a2620 40%, #1c1b18 100%)",
