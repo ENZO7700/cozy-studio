@@ -13,7 +13,7 @@ import {
   TableProperties,
   X,
 } from "lucide-react";
-import { AccountRailCard } from "@/components/studio/AccountRailCard";
+import { CozyAvatar } from "@/components/studio/AccountView";
 import { cn } from "@/lib/utils";
 import type { StudioProfile } from "@/lib/studio/profile";
 import type { StudioRecent } from "@/lib/studio/recents";
@@ -40,9 +40,8 @@ type StudioNavRailProps = {
   onRecent: (recent: StudioRecent) => void;
   onToggleStar: (id: string) => void;
   profile: StudioProfile;
-  onProfileChange: (patch: Partial<StudioProfile>) => void;
-  previewHtml: string;
-  previewTitle: string;
+  accountActive: boolean;
+  onAccountOpen: () => void;
 };
 
 function NavMark({ compact }: { compact?: boolean }) {
@@ -99,12 +98,45 @@ function StarterRow({
   );
 }
 
+function AccountNavRow({
+  profile,
+  collapsed,
+  active,
+  onClick,
+}: {
+  profile: StudioProfile;
+  collapsed: boolean;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={collapsed ? profile.displayName : undefined}
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
+        collapsed && "justify-center px-1.5",
+        active
+          ? "bg-accent/15 text-accent"
+          : "text-muted hover:bg-card hover:text-fg",
+      )}
+    >
+      <CozyAvatar profile={profile} size="md" variant="studio" />
+      {!collapsed ? <span className="truncate">{profile.displayName}</span> : null}
+    </button>
+  );
+}
+
 function RailBody({
   collapsed,
   lastStarterId,
   recents,
   starredIds,
   running,
+  profile,
+  accountActive,
+  onAccountOpen,
   onStarter,
   onRecent,
   onToggleStar,
@@ -115,6 +147,9 @@ function RailBody({
   recents: StudioRecent[];
   starredIds: Set<string>;
   running: boolean;
+  profile: StudioProfile;
+  accountActive: boolean;
+  onAccountOpen: () => void;
   onStarter: (starter: Starter) => void;
   onRecent: (recent: StudioRecent) => void;
   onToggleStar: (id: string) => void;
@@ -233,6 +268,20 @@ function RailBody({
             ))}
           </ul>
         )}
+      </div>
+
+      <div className="shrink-0 border-t border-border pt-2">
+        {!collapsed ? (
+          <p className="mb-1.5 px-2 text-[10px] font-medium uppercase tracking-widest text-subtle">
+            Account
+          </p>
+        ) : null}
+        <AccountNavRow
+          profile={profile}
+          collapsed={collapsed}
+          active={accountActive}
+          onClick={onAccountOpen}
+        />
       </div>
     </div>
   );
@@ -460,17 +509,6 @@ export function StudioNavRail(props: StudioNavRailProps) {
         {...bodyProps}
         collapsed={collapsed}
         onSearchOpen={() => setSearchOpen(true)}
-      />
-      <AccountRailCard
-        collapsed={collapsed}
-        profile={bodyProps.profile}
-        onProfileChange={bodyProps.onProfileChange}
-        recents={bodyProps.recents}
-        starredIds={bodyProps.starredIds}
-        running={bodyProps.running}
-        onRecent={bodyProps.onRecent}
-        previewHtml={bodyProps.previewHtml}
-        previewTitle={bodyProps.previewTitle}
       />
       <StudioSearchPalette
         open={searchOpen}

@@ -10,6 +10,7 @@ import { PreviewPulseSkeleton } from "@/components/studio/PreviewPulseSkeleton";
 import { StarterConfigCanvas } from "@/components/studio/StarterConfigCanvas";
 import { StudioDesktopSplit } from "@/components/studio/StudioDesktopSplit";
 import { StudioNavRail } from "@/components/studio/StudioNavRail";
+import { AccountView } from "@/components/studio/AccountView";
 import { ThinkingStatus } from "@/components/studio/ThinkingStatus";
 import { cn } from "@/lib/utils";
 import {
@@ -104,6 +105,7 @@ export function StudioShell() {
   const [recents, setRecents] = useState<StudioRecent[]>(() => loadRecents());
   const [starredIds, setStarredIds] = useState<Set<string>>(() => loadStarredIds());
   const [profile, setProfile] = useState<StudioProfile>(() => loadProfile());
+  const [accountOpen, setAccountOpen] = useState(false);
   const [configStarterId, setConfigStarterId] = useState<string | null>(null);
   const [selectedAddonIds, setSelectedAddonIds] = useState<Set<string>>(() => new Set());
   const [activeFile, setActiveFile] = useState<string | null>(null);
@@ -172,6 +174,7 @@ export function StudioShell() {
     setShowSource(false);
     setPanel("chat");
     setMobileNavOpen(false);
+    setAccountOpen(false);
     setConfigStarterId(null);
     setSelectedAddonIds(new Set());
     setActiveFile(null);
@@ -185,6 +188,7 @@ export function StudioShell() {
   }
 
   function pickStarter(starter: Starter) {
+    setAccountOpen(false);
     setLastStarterId(starter.id);
     try {
       localStorage.setItem(LAST_STARTER_KEY, starter.id);
@@ -240,6 +244,7 @@ export function StudioShell() {
   }
 
   function openRecent(recent: StudioRecent) {
+    setAccountOpen(false);
     setMobileNavOpen(false);
     setConfigStarterId(null);
     setSelectedAddonIds(new Set());
@@ -302,6 +307,7 @@ export function StudioShell() {
         });
       }
       setBrief("");
+      setAccountOpen(false);
       setPanel("preview");
       return;
     }
@@ -339,6 +345,7 @@ export function StudioShell() {
           recordReviseActivity();
         }
         setBrief("");
+        setAccountOpen(false);
         setPanel("preview");
         return;
       }
@@ -364,6 +371,24 @@ export function StudioShell() {
 
   const studioFiles = listStudioFiles(html, code);
 
+  function openAccount() {
+    setAccountOpen((open) => {
+      const next = !open;
+      if (next) {
+        setMobileNavOpen(false);
+        setConfigStarterId(null);
+        setPanel("preview");
+      }
+      return next;
+    });
+  }
+
+  function closeAccountToRecents() {
+    setAccountOpen(false);
+    setMobileNavOpen(true);
+    setPanel("chat");
+  }
+
   const navRailProps = {
     collapsed: railCollapsed,
     onCollapsedChange: setRailCollapsed,
@@ -377,9 +402,8 @@ export function StudioShell() {
     onRecent: openRecent,
     onToggleStar: toggleStar,
     profile,
-    onProfileChange: (patch: Partial<StudioProfile>) => setProfile(saveProfile(patch)),
-    previewHtml: html,
-    previewTitle: title,
+    accountActive: accountOpen,
+    onAccountOpen: openAccount,
   };
 
   const chatPanel = (
@@ -523,18 +547,34 @@ export function StudioShell() {
     <>
       <div className="flex h-12 shrink-0 items-center border-b border-border pl-3 pr-1">
         <p className="min-w-0 truncate text-xs uppercase tracking-widest text-subtle">
-          {running
-            ? html
-              ? "Upravujem"
-              : "Premýšľanie"
-            : configStarter
-              ? "Configure"
-              : online
-                ? "Live preview"
-                : "Saved preview"}
+          {accountOpen
+            ? "Account"
+            : running
+              ? html
+                ? "Upravujem"
+                : "Premýšľanie"
+              : configStarter
+                ? "Configure"
+                : online
+                  ? "Live preview"
+                  : "Saved preview"}
         </p>
       </div>
-      {configStarter && !running ? (
+      {accountOpen ? (
+        <AccountView
+          profile={profile}
+          onProfileChange={(patch: Partial<StudioProfile>) =>
+            setProfile(saveProfile(patch))
+          }
+          recents={recents}
+          starredIds={starredIds}
+          running={running}
+          previewHtml={html}
+          previewTitle={title}
+          onRecent={openRecent}
+          onDiscoverRecents={closeAccountToRecents}
+        />
+      ) : configStarter && !running ? (
         <StarterConfigCanvas
           starter={configStarter}
           selectedAddonIds={selectedAddonIds}

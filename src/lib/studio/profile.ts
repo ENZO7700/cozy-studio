@@ -90,6 +90,26 @@ export function formatProfileDate(ts: number): string {
   }).format(new Date(ts));
 }
 
+export function formatMemberSince(ts: number): string {
+  return new Intl.DateTimeFormat("sk-SK", { month: "long", year: "numeric" }).format(
+    new Date(ts),
+  );
+}
+
+export function formatRelativeActive(ts: number): string {
+  const diffMs = Date.now() - ts;
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (days <= 0) return "dnes";
+  if (days === 1) return "včera";
+  if (days < 7) return `pred ${days} dňami`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `pred ${weeks} týždňami`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `pred ${months} mesiacmi`;
+  const years = Math.floor(days / 365);
+  return `pred ${years} rokmi`;
+}
+
 /** Resize image file to a data URL capped for localStorage. */
 export async function fileToDataUrl(
   file: File,
