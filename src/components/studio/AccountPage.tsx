@@ -202,7 +202,7 @@ export function AccountPage() {
               type="button"
               aria-label="Nastaviť cover"
               onClick={() => coverInputRef.current?.click()}
-              className="relative block h-40 w-full sm:h-52"
+              className="relative block h-40 w-full overflow-hidden rounded-3xl sm:h-52"
             >
               <WarmCover coverDataUrl={profile.coverDataUrl} />
             </button>
@@ -252,7 +252,7 @@ export function AccountPage() {
           </div>
         </section>
 
-        <div className="mt-2 flex justify-end sm:hidden">{editButton}</div>
+        <div className="mt-16 flex justify-end sm:hidden">{editButton}</div>
 
         <section className="mt-12 min-w-0 sm:mt-3 sm:pl-[8.75rem]">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
