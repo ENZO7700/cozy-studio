@@ -15,6 +15,20 @@ function Home() {
         >
           Cozy
         </Link>
+        <nav className="flex items-center gap-4 text-sm">
+          <Link
+            to="/studio"
+            className="text-muted transition-colors hover:text-fg"
+          >
+            Studio
+          </Link>
+          <Link
+            to="/account"
+            className="text-muted transition-colors hover:text-fg"
+          >
+            Account
+          </Link>
+        </nav>
         <Link to="/studio" className={buttonVariants({ size: "sm" })}>
           Open Studio
         </Link>
@@ -29,15 +43,15 @@ function Home() {
             A quiet studio for shipping product surfaces.
           </h1>
           <p className="mt-6 max-w-xl text-base leading-relaxed text-muted sm:text-lg">
-            Write a brief. Generate a live preview. Then revise in place — the
-            canvas stays put.
+            Write a brief. Get one HTML preview. Revise in place, then download
+            the .html file.
           </p>
           <div className="mt-10">
             <Link
               to="/studio"
               className={cn(buttonVariants(), "h-12 px-6 pr-5")}
             >
-              Start in Studio
+              Open Studio
               <ArrowRight className="size-4" />
             </Link>
           </div>
@@ -57,14 +71,14 @@ function Home() {
             body: "Describe the page in one paragraph.",
           },
           {
-            icon: Send,
-            title: "Generate",
-            body: "A server call. Self-contained HTML lands on the canvas.",
-          },
-          {
             icon: Eye,
             title: "Preview",
-            body: "Sandboxed iframe. Copy, download, then revise in place.",
+            body: "One self-contained HTML preview in a sandboxed iframe.",
+          },
+          {
+            icon: Send,
+            title: "Revise & download",
+            body: "Edit the brief to revise in place, then copy or download .html.",
           },
         ].map((item) => (
           <li key={item.title}>

@@ -20,7 +20,7 @@
  * `process.env`, which is why the merge has to happen before Vite starts.
  */
 import { spawn } from "node:child_process";
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { constants as osConstants } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -104,14 +104,40 @@ export function isMainModule(moduleUrl) {
   }
 }
 
+/**
+ * Resolve how to spawn `command` on this platform.
+ *
+ * On Windows, npm bin shims are `.cmd` files; `spawn(cmd)` without a shell
+ * fails with ENOENT even when the shim exists. Prefer the package's JS CLI
+ * via `process.execPath` when available (no shell, no DEP0190); otherwise
+ * fall back to `shell: true` for bare commands.
+ */
+export function resolveSpawnTarget(command, args, root) {
+  if (process.platform !== "win32") {
+    return { file: command, spawnArgs: args, shell: false };
+  }
+  if (command === process.execPath || /\.exe$/i.test(command)) {
+    return { file: command, spawnArgs: args, shell: false };
+  }
+  if (!command.includes("/") && !command.includes("\\")) {
+    const jsCli = join(root, "node_modules", command, "bin", `${command}.js`);
+    if (existsSync(jsCli)) {
+      return { file: process.execPath, spawnArgs: [jsCli, ...args], shell: false };
+    }
+  }
+  return { file: command, spawnArgs: args, shell: true };
+}
+
 function main(argv) {
   const [command, ...args] = argv;
   if (!command) {
     console.error("usage: node scripts/with-app-env.mjs <command> [args…]");
     process.exit(2);
   }
-  const env = mergeAppEnv(readAppEnv(projectRoot()), process.env);
-  const child = spawn(command, args, { stdio: "inherit", env });
+  const root = projectRoot();
+  const env = mergeAppEnv(readAppEnv(root), process.env);
+  const { file, spawnArgs, shell: useShell } = resolveSpawnTarget(command, args, root);
+  const child = spawn(file, spawnArgs, { stdio: "inherit", env, shell: useShell });
   // The dev server is long-running and is stopped by signalling this wrapper.
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     process.on(signal, () => child.kill(signal));

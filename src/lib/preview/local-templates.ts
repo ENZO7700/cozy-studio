@@ -1,6 +1,6 @@
 /** Client-safe HTML templates. Never import vite / Node here. */
 
-import { injectCozyElements } from "@/lib/preview/cozy-elements";
+import { injectCozyElements } from "./cozy-elements.ts";
 
 export type PreviewKind = "kanban" | "chat" | "habits" | "calendar" | "notes" | "landing";
 
@@ -128,26 +128,30 @@ paint();`,
 function chat(title: string, brief: string): string {
   return shell(
     title,
-    `<div class="app" style="max-width:720px">
-      <p class="kicker">Studio chat</p>
-      <h1>${escapeHtml(title)}</h1>
-      <p class="lede">${escapeHtml(brief.slice(0, 160))}</p>
-      <div id="log" class="card" style="min-height:280px;display:flex;flex-direction:column;gap:10px">
-        <div style="max-width:80%;padding:10px 12px;border-radius:14px;font-family:system-ui;font-size:14px;line-height:1.45;background:#fff;border:1px solid #ddd4c6">Ready when you are.</div>
+    `<cozy-app kicker="Chat" heading="${escapeHtml(title)}" lede="${escapeHtml(brief.slice(0, 160))}">
+      <div id="log" style="min-height:280px;display:flex;flex-direction:column;gap:10px;margin-bottom:12px">
+        <cozy-msg role="assistant">Ready when you are.</cozy-msg>
       </div>
-      <form id="send" class="row" style="margin-top:12px">
-        <input class="field" id="msg" placeholder="Ask something" required style="flex:1"/>
-        <button class="btn" type="submit">Send</button>
+      <form id="send" class="row" style="display:flex;gap:12px;flex-wrap:wrap">
+        <input class="field" id="msg" placeholder="Ask something" required style="flex:1;min-width:180px"/>
+        <cozy-btn type="submit">Send</cozy-btn>
       </form>
-    </div>`,
+    </cozy-app>`,
     `const log=document.getElementById("log");
 function add(role,text){
-  const el=document.createElement("div");
-  el.style.cssText="max-width:80%;padding:10px 12px;border-radius:14px;font-family:system-ui;font-size:14px;line-height:1.45;"+(role==="user"?"margin-left:auto;background:#c45c38;color:#fff7f0":"background:#fff;border:1px solid #ddd4c6");
-  el.textContent=text; log.appendChild(el); log.scrollTop=log.scrollHeight;
+  const el=document.createElement("cozy-msg");
+  el.setAttribute("role",role);
+  el.textContent=text;
+  log.appendChild(el);
+  log.scrollTop=log.scrollHeight;
 }
-add("user",t);
-  setTimeout(()=>add("assistant","Noted: "+t.slice(0,80)+". I would sketch a paper-and-ink layout next."),240);
+document.getElementById("send").onsubmit=function(e){
+  e.preventDefault();
+  const i=document.getElementById("msg");
+  const t=i.value.trim();
+  if(!t) return;
+  add("user",t);
+  i.value="";
   setTimeout(()=>add("assistant","Noted: "+t.slice(0,80)+". I would sketch a paper-and-ink layout next."),240);
 };`,
   );
@@ -156,13 +160,10 @@ add("user",t);
 function habits(title: string, brief: string): string {
   return shell(
     title,
-    `<div class="app">
-      <p class="kicker">Habits</p>
-      <h1>${escapeHtml(title)}</h1>
-      <p class="lede">${escapeHtml(brief.slice(0, 160))}</p>
-      <p class="lede" id="meta"></p>
+    `<cozy-app kicker="Habits" heading="${escapeHtml(title)}" lede="${escapeHtml(brief.slice(0, 160))}">
+      <p id="meta" style="font-family:system-ui,sans-serif;color:#4a433a;font-size:14px;margin:-8px 0 16px"></p>
       <div id="grid"></div>
-    </div>`,
+    </cozy-app>`,
     `const days=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const habits=["Water","Movement","Reading","Sleep"];
 const key="cozy-habits";
@@ -176,25 +177,26 @@ function paint(){
   document.getElementById("meta").textContent=count()+" / "+(habits.length*7)+" cells this week";
   grid.innerHTML="";
   habits.forEach(h=>{
-    const row=document.createElement("div");
-    row.className="card";
-    row.style.marginBottom="10px";
+    const card=document.createElement("cozy-card");
+    card.style.marginBottom="10px";
     const head=document.createElement("div");
-    head.style.cssText="font-weight:600;margin-bottom:8px";
-    head.textContent=h; row.appendChild(head);
+    head.style.cssText="font-weight:600;margin-bottom:8px;font-family:system-ui,sans-serif";
+    head.textContent=h;
+    card.appendChild(head);
     const cells=document.createElement("div");
     cells.style.cssText="display:grid;grid-template-columns:repeat(7,1fr);gap:8px";
     days.forEach(d=>{
       const id=h+"-"+d;
-      const b=document.createElement("button");
-      b.type="button";
-      b.textContent=d;
       const on=!!state[id];
-      b.style.cssText="height:44px;border-radius:12px;border:1px solid #ddd4c6;font-family:system-ui;font-size:11px;letter-spacing:.06em;text-transform:uppercase;"+(on?"background:#c45c38;color:#fff7f0;border-color:#c45c38":"background:#fff;color:#1c1915");
-      b.onclick=()=>{state[id]=!state[id];lsSet(key,JSON.stringify(state));paint()};
+      const b=document.createElement("cozy-btn");
+      if(!on) b.setAttribute("variant","ghost");
+      b.textContent=d;
+      b.style.cssText="width:100%;font-size:11px;letter-spacing:.06em;text-transform:uppercase";
+      b.addEventListener("click",()=>{state[id]=!state[id];lsSet(key,JSON.stringify(state));paint()});
       cells.appendChild(b);
     });
-    row.appendChild(cells); grid.appendChild(row);
+    card.appendChild(cells);
+    grid.appendChild(card);
   });
 }
 paint();`,
@@ -204,43 +206,40 @@ paint();`,
 function calendar(title: string, brief: string): string {
   return shell(
     title,
-    `<div class="app">
-      <p class="kicker">Calendar</p>
-      <h1>${escapeHtml(title)}</h1>
-      <p class="lede">${escapeHtml(brief.slice(0, 160))}</p>
-      <div class="row" style="align-items:flex-start">
-        <div class="card" style="flex:1.4;min-width:260px">
-          <div id="month" style="font-weight:600;margin-bottom:10px"></div>
+    `<cozy-app kicker="Calendar" heading="${escapeHtml(title)}" lede="${escapeHtml(brief.slice(0, 160))}">
+      <cozy-board>
+        <cozy-column name="Month">
+          <div id="month" style="font-weight:600;margin-bottom:10px;font-family:system-ui,sans-serif"></div>
           <div id="cal" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px"></div>
-        </div>
-        <div class="card" style="flex:1;min-width:220px">
-          <strong>Notes</strong>
-          <input class="field" id="note" placeholder="Write a note, then click a day" style="margin:10px 0"/>
-          <ul id="list" style="padding-left:18px;font-family:system-ui;font-size:14px"></ul>
-        </div>
-      </div>
-    </div>`,
+        </cozy-column>
+        <cozy-column name="Notes">
+          <input class="field" id="note" placeholder="Write a note, then click a day" style="margin-bottom:10px"/>
+          <ul id="list" style="padding-left:18px;font-family:system-ui,sans-serif;font-size:14px;margin:0"></ul>
+        </cozy-column>
+      </cozy-board>
+    </cozy-app>`,
     `const now=new Date();
 const y=now.getFullYear(), m=now.getMonth();
 document.getElementById("month").textContent=now.toLocaleString("en",{month:"long",year:"numeric"});
 const notes={};
 const cal=document.getElementById("cal");
 const list=document.getElementById("list");
-["S","M","T","W","T","F","S"].forEach(d=>{const e=document.createElement("div");e.textContent=d;e.style.cssText="text-align:center;font-size:11px;color:#8a7f70;font-family:system-ui";cal.appendChild(e)});
+["S","M","T","W","T","F","S"].forEach(d=>{const e=document.createElement("div");e.textContent=d;e.style.cssText="text-align:center;font-size:11px;color:#8a7f70;font-family:system-ui,sans-serif";cal.appendChild(e)});
 const first=new Date(y,m,1).getDay();
 const days=new Date(y,m+1,0).getDate();
 for(let i=0;i<first;i++){const e=document.createElement("div");cal.appendChild(e)}
 function paintNotes(){
   list.innerHTML="";
-  Object.keys(notes).sort().forEach(k=>{const li=document.createElement("li");li.textContent=k+": "+notes[k];list.appendChild(li)});
-  if(!list.children.length){list.innerHTML="<li>Click a day to add a note.</li>"}
+  Object.keys(notes).sort((a,b)=>Number(a)-Number(b)).forEach(k=>{const li=document.createElement("li");li.textContent=k+": "+notes[k];list.appendChild(li)});
+  if(!list.children.length){list.innerHTML="<li style=\\"color:#8a7f70\\">Click a day to add a note.</li>"}
 }
 for(let d=1;d<=days;d++){
-  const b=document.createElement("button");
-  b.type="button"; b.textContent=String(d);
+  const b=document.createElement("cozy-btn");
   const today=d===now.getDate();
-  b.style.cssText="height:40px;border-radius:10px;border:1px solid #ddd4c6;font-family:system-ui;"+(today?"background:#c45c38;color:#fff7f0;border-color:#c45c38":"background:#fff");
-  b.onclick=()=>{const t=document.getElementById("note").value.trim(); if(t){notes[d]=t;paintNotes()}};
+  if(!today) b.setAttribute("variant","ghost");
+  b.textContent=String(d);
+  b.style.cssText="width:100%;font-size:13px";
+  b.addEventListener("click",()=>{const t=document.getElementById("note").value.trim(); if(t){notes[d]=t;paintNotes()}});
   cal.appendChild(b);
 }
 paintNotes();`,
@@ -250,21 +249,18 @@ paintNotes();`,
 function notes(title: string, brief: string): string {
   return shell(
     title,
-    `<div class="app">
-      <p class="kicker">Notes</p>
-      <h1>${escapeHtml(title)}</h1>
-      <p class="lede">${escapeHtml(brief.slice(0, 160))}</p>
-      <div class="row" style="align-items:stretch">
-        <div class="card" style="flex:0 0 220px">
-          <button class="btn" id="new" type="button" style="width:100%;margin-bottom:10px">New note</button>
+    `<cozy-app kicker="Notes" heading="${escapeHtml(title)}" lede="${escapeHtml(brief.slice(0, 160))}">
+      <cozy-board>
+        <cozy-column name="Library">
+          <cozy-btn id="new" type="button" style="width:100%;margin-bottom:10px">New note</cozy-btn>
           <div id="list"></div>
-        </div>
-        <div class="card" style="flex:1;min-width:220px">
+        </cozy-column>
+        <cozy-column name="Editor">
           <input class="field" id="ntitle" placeholder="Title" style="margin-bottom:10px"/>
           <textarea class="field" id="nbody" rows="10" placeholder="Write here"></textarea>
-        </div>
-      </div>
-    </div>`,
+        </cozy-column>
+      </cozy-board>
+    </cozy-app>`,
     `const key="cozy-notes";
 const mem={};
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return mem[k]||null}}
@@ -278,10 +274,11 @@ function save(){lsSet(key,JSON.stringify(items))}
 function paint(){
   list.innerHTML="";
   items.forEach(n=>{
-    const btn=document.createElement("button");
-    btn.type="button"; btn.textContent=n.title||"Untitled";
-    btn.style.cssText="display:block;width:100%;text-align:left;margin:0 0 6px;padding:8px 10px;border-radius:10px;border:1px solid #ddd4c6;background:"+(n.id===current?"#c45c38;color:#fff7f0":"#fff")+";font-family:system-ui";
-    btn.onclick=()=>{current=n.id;load()};
+    const btn=document.createElement("cozy-btn");
+    if(n.id!==current) btn.setAttribute("variant","ghost");
+    btn.textContent=n.title||"Untitled";
+    btn.style.cssText="display:block;width:100%;margin:0 0 6px;text-align:left";
+    btn.addEventListener("click",()=>{current=n.id;load()});
     list.appendChild(btn);
   });
 }
@@ -294,9 +291,9 @@ function persist(){
   n.title=t.value; n.body=b.value; save(); paint();
 }
 t.oninput=persist; b.oninput=persist;
-document.getElementById("new").onclick=()=>{
+document.getElementById("new").addEventListener("click",()=>{
   const n={id:Date.now(),title:"New note",body:""}; items.unshift(n); current=n.id; save(); load();
-};
+});
 load();`,
   );
 }

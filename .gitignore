@@ -9,3 +9,7 @@ dist/
 .github_repo
 .tanstack/
 *.local
+tmp-*
+debug-*.log
+screenshots/
+screenshots/e2e-results/

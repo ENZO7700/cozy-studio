@@ -11,6 +11,7 @@ import {
   parseAppEnv,
   projectRoot,
   readAppEnv,
+  resolveSpawnTarget,
 } from "./with-app-env.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -113,11 +114,19 @@ test("a signal-killed command is never reported as success", async () => {
   );
 });
 
-test("the CLI still runs when invoked through a symlinked path", async () => {
+test("the CLI still runs when invoked through a symlinked path", async (t) => {
   // node realpaths import.meta.url but not process.argv[1], so a raw comparison
   // turns the wrapper into a no-op that exits 0 without starting anything.
   const link = join(mkdtempSync(join(tmpdir(), "app-env-link-")), "scripts");
-  symlinkSync(join(projectRoot(), "scripts"), link);
+  try {
+    symlinkSync(join(projectRoot(), "scripts"), link);
+  } catch (err) {
+    if (err && (err.code === "EPERM" || err.code === "ENOTSUP")) {
+      t.skip("symlinks require privilege on this Windows host");
+      return;
+    }
+    throw err;
+  }
   const { stdout } = await execFileAsync(process.execPath, [
     join(link, "with-app-env.mjs"),
     process.execPath,
@@ -125,4 +134,26 @@ test("the CLI still runs when invoked through a symlinked path", async () => {
     PRINT_FLAG,
   ]);
   assert.equal(stdout, "false");
+});
+
+test("resolveSpawnTarget leaves process.execPath alone without a shell", () => {
+  const args = ["-e", "0"];
+  const resolved = resolveSpawnTarget(process.execPath, args, projectRoot());
+  assert.equal(resolved.file, process.execPath);
+  assert.deepEqual(resolved.spawnArgs, args);
+  assert.equal(resolved.shell, false);
+});
+
+test("resolveSpawnTarget prefers the JS CLI for bare vite on Windows", (t) => {
+  if (process.platform !== "win32") {
+    t.skip("Windows-only spawn resolution");
+    return;
+  }
+  const root = projectRoot();
+  const args = ["dev", "--host", "0.0.0.0"];
+  const resolved = resolveSpawnTarget("vite", args, root);
+  assert.equal(resolved.file, process.execPath);
+  assert.equal(resolved.shell, false);
+  assert.equal(resolved.spawnArgs[0], join(root, "node_modules", "vite", "bin", "vite.js"));
+  assert.deepEqual(resolved.spawnArgs.slice(1), args);
 });
