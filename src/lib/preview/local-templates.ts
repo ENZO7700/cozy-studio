@@ -1,6 +1,6 @@
 /** Client-safe HTML templates. Never import vite / Node here. */
 
-import { injectCozyElements } from "@/lib/preview/cozy-elements";
+import { injectCozyElements } from "./cozy-elements.ts";
 
 export type PreviewKind = "kanban" | "chat" | "habits" | "calendar" | "notes" | "landing";
 

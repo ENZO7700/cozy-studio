@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { checkedOutputPath, checkedUrl } from "./browser-guard.mjs";
 import { computeBrandWarnings } from "./brand-check.mjs";
@@ -20,6 +21,12 @@ import {
   parseSmokeArgs,
 } from "./browser-smoke-verdict.mjs";
 
+/** Sandbox (/workspace) plus local repo screenshots/ for Windows/dev hosts. */
+export const SMOKE_OUTPUT_DIRS = [
+  "/workspace",
+  join(dirname(fileURLToPath(import.meta.url)), "..", "screenshots"),
+];
+
 const args = parseSmokeArgs(process.argv.slice(2), process.env);
 if (args.error) {
   console.error(JSON.stringify({ ok: false, error: args.error }, null, 2));
@@ -27,10 +34,10 @@ if (args.error) {
 }
 
 const url = checkedUrl(args.url);
-const outPng = checkedOutputPath(args.outPng, ["/workspace"]);
+const outPng = checkedOutputPath(args.outPng, SMOKE_OUTPUT_DIRS);
 const derived = derivedPaths(outPng);
-const mobilePng = checkedOutputPath(derived.mobilePng, ["/workspace"]);
-const outJson = checkedOutputPath(derived.verdictJson, ["/workspace"], "verdict JSON");
+const mobilePng = checkedOutputPath(derived.mobilePng, SMOKE_OUTPUT_DIRS);
+const outJson = checkedOutputPath(derived.verdictJson, SMOKE_OUTPUT_DIRS, "verdict JSON");
 
 const MAX_BASELINE_BYTES = 1024 * 1024;
 const baselineRequested = Boolean(args.baseline);
@@ -38,7 +45,7 @@ let baselinePath = null;
 let baselineResolveError = null;
 if (baselineRequested) {
   try {
-    baselinePath = checkedOutputPath(realpathSync(args.baseline), ["/workspace"], "baseline");
+    baselinePath = checkedOutputPath(realpathSync(args.baseline), SMOKE_OUTPUT_DIRS, "baseline");
   } catch (err) {
     baselineResolveError = err?.code ?? "unresolvable path";
   }

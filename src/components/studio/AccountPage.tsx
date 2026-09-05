@@ -70,7 +70,7 @@ function PinnedCard({
 }) {
   return (
     <article className="overflow-hidden rounded-xl border border-border bg-card transition-colors hover:border-accent/40">
-      <div className="relative aspect-[16/10] overflow-hidden bg-canvas">
+      <div className="relative aspect-16/10 overflow-hidden bg-canvas">
         <button
           type="button"
           onClick={onOpen}
@@ -113,7 +113,7 @@ function PinnedCard({
 function EmptyPinnedSlot() {
   return (
     <div className="overflow-hidden rounded-xl border border-dashed border-border bg-surface/50">
-      <div className="flex aspect-[16/10] flex-col items-center justify-center p-6 text-center">
+      <div className="flex aspect-16/10 flex-col items-center justify-center p-6 text-center">
         <Star className="mb-2 size-6 text-subtle" aria-hidden />
         <p className="text-sm text-muted">Pripnite hviezdou v posledných v Studio.</p>
         <Link
@@ -254,7 +254,7 @@ export function AccountPage() {
 
         <div className="mt-16 flex justify-end sm:hidden">{editButton}</div>
 
-        <section className="mt-12 min-w-0 sm:mt-3 sm:pl-[8.75rem]">
+        <section className="mt-12 min-w-0 sm:mt-3 sm:pl-35">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <h1 className="font-serif text-2xl font-semibold tracking-tight sm:text-3xl">
               {profile.displayName}

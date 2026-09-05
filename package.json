@@ -1,11 +1,17 @@
 {
   "name": "cozy-studio",
+  "version": "1.0.0",
   "private": true,
-  "sideEffects": false,
-  "type": "module",
-  "overrides": {
-    "nf3": "0.3.17"
+  "description": "A calm web studio for turning a short product brief into a live HTML preview — warm paper, ink type, terracotta accents, and `<cozy-app>` chrome.",
+  "homepage": "https://github.com/ENZO7700/cozy-studio#readme",
+  "bugs": {
+    "url": "https://github.com/ENZO7700/cozy-studio/issues"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ENZO7700/cozy-studio.git"
+  },
+  "type": "module",
   "scripts": {
     "dev": "node scripts/with-app-env.mjs vite dev --host 0.0.0.0 --port 8080",
     "build": "node scripts/with-app-env.mjs vite build && npm run db:migrate",
@@ -16,7 +22,12 @@
     "preview:stop": "node scripts/preview.mjs stop",
     "typecheck": "tsc --noEmit",
     "check:auth": "node scripts/check-auth-invariant.mjs",
-    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/auth/gate-identity.test.ts src/lib/preview/cozy-elements.test.ts src/lib/studio/run-failure.test.ts",
+    "test": "node scripts/run-unit-tests.mjs",
+    "test:unit": "node scripts/run-unit-tests.mjs",
+    "test:platform": "node scripts/run-platform-tests.mjs",
+    "test:e2e": "playwright test",
+    "test:smoke": "node scripts/browser-smoke.mjs http://127.0.0.1:8080/ screenshots/audit-smoke.png",
+    "test:audit": "npm run typecheck && npm run lint && npm run test:unit && npm run test:e2e",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
@@ -75,6 +86,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.20.0",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^22.16.5",
     "@types/pg": "^8.11.10",
     "@types/react": "^19.2.0",
@@ -93,5 +105,9 @@
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.56.1",
     "vite": "^8.2.0"
-  }
+  },
+  "overrides": {
+    "nf3": "0.3.17"
+  },
+  "sideEffects": false
 }
